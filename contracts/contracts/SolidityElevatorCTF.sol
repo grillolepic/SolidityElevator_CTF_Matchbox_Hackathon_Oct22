@@ -445,21 +445,29 @@ contract SolidityElevatorCTF {
                     _elevatorsData[_currentElevatorId].light = _update.light;
                     _elevatorsData[_currentElevatorId].data = _update.data;
 
-                    //Floor Queue can either be fully replaced, or be added to the current queue
-                    //In the second case, the floors are pushed intro storage
+                    //Floor Queue is managed in storage. It can be fully replaced or added to the current queue.
                     if (_update.replaceFloorQueue) {
-
-                        //TODO: Delete all floors from storage
-                        _elevatorsData[_currentElevatorId].floorQueue = _update.floorQueue;
-                        _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
-                    } 
-                    
-                    if (_update.floorQueue.length > 0) {
+                        //If fully replaced, we first remove any excess items in storage
+                        while (_update.floorQueue.length > elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length) {
+                            elevatorsData[gameRoomId][_currentElevatorId].floorQueue.pop();
+                        }
+                        //We then loop through the update queue and update the storage (pushing or replacing)
+                        for (uint8 i=0; i<_update.floorQueue.length; i++) {
+                            if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length > i) {
+                                elevatorsData[gameRoomId][_currentElevatorId].floorQueue[i] = _update.floorQueue[i];
+                            } else {
+                                elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
+                            }
+                        }
+                    } else {
+                        //If update queue only asks to be added to the current queue, we just loop and push to storage
                         for (uint8 i=0; i<_update.floorQueue.length; i++) {
                             elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
-                            _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
                         }
                     }
+                    //We finally copy the updated storage to memory
+                    _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
+
                 } catch {}
                
                 //Now that the elevator has processed its turns, execute game logic depending on the
