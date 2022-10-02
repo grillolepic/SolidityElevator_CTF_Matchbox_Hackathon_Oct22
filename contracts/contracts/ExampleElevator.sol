@@ -4,8 +4,6 @@ pragma solidity 0.8.17;
 import "./Elevator.sol";
 
 contract ExampleElevator is Elevator {
-    constructor(SolidityElevatorCTF _sectf) Elevator(_sectf) {}
-
     function playTurnOffChain(
         uint256 gameRoomId,
         uint8 myElevatorId,
@@ -14,12 +12,10 @@ contract ExampleElevator is Elevator {
         SolidityElevatorCTF.ElevatorInfo[] memory elevInfo,
         SolidityElevatorCTF.FloorButtons[] memory floorButtons
     ) override public view returns(SolidityElevatorCTF.ElevatorUpdate memory) {
-
-        uint8[] memory _addToQueue; 
         return SolidityElevatorCTF.ElevatorUpdate(
             elevInfo[myElevatorId].light,
             false,
-            _addToQueue,
+            new uint8[](0),
             SolidityElevatorCTF.ActionType.SPEED_UP,
             0,
             0,

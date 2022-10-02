@@ -12,6 +12,7 @@ pragma solidity ^0.8.17;
 import "./utils/SignedWadMath.sol";
 import "./utils/DRNG.sol";
 
+import "./IElevator.sol";
 import "./Elevator.sol";
 import "hardhat/console.sol";
 
@@ -22,19 +23,26 @@ contract SolidityElevatorCTF {
     //////////////////////////////////////////////////////////////*/
 
     event GameRoomCreated(uint256 indexed id, address player);
-    event GameRoomJoined(uint256 indexed id, address player);
+    event GameRoomPlayerJoined(uint256 indexed id, address player);
+    event GameRoomPlayerLeft(uint256 indexed id, address player);
     event GameRoomReady(uint256 indexed id);
+    event GameRoomCancelled(uint256 indexed id);
+    event GameRoomTimeout(uint256 indexed id);
     event GameRoomFinished(uint256 indexed id, address winner);
 
     /*//////////////////////////////////////////////////////////////
-                      MISCELLANEOUS CONSTANTS
+                        MISCELLANEOUS CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
-    uint8 private constant PLAYERS = 3;
-    uint8 private constant FLOORS = 8;
-    uint8 private constant SCORE_TO_WIN = 100;
+    uint8 private constant MAX_PLAYERS = 4;
+    uint8 private constant MIN_FLOORS = 4;
+    uint8 private constant MAX_FLOORS = 8;
+    uint8 private constant MIN_SCORE_TO_WIN = 10;
+    uint8 private constant MAX_SCORE_TO_WIN = 100;
+    uint32 private constant MAX_ROOM_TIME = 1 hours;
+
     uint16 private constant SOFT_TURN_DEADLINE = 1000;
-    uint16 private constant HARD_TURN_DEADLINE = 1500;
+    uint16 private constant HARD_TURN_DEADLINE = (SOFT_TURN_DEADLINE * 11) / 10;
 
     uint8 private constant NEW_PASSENGERS_SPAWN_RATE = 5;   //MORE IS LESS
     uint8 private constant MAX_PASSENGERS_PER_ELEVATOR = 4;
@@ -55,24 +63,25 @@ contract SolidityElevatorCTF {
 
     enum ActionType { SPEED_UP, SLOW_DOWN }
 
-    struct ActionPriceSettings {
+    struct ActionSettings {
         int256 targetPrice;
         int256 perTurnDecrease;
         int256 sellPerTurn;
+        uint8 value;
     }
 
-    mapping (ActionType => ActionPriceSettings) internal actionPriceSettings;
+    mapping (ActionType => ActionSettings) internal actionSettings;
 
     constructor() {
-        actionPriceSettings[ActionType.SPEED_UP] = ActionPriceSettings(10e18, 0.33e18, 2e18);
-        actionPriceSettings[ActionType.SLOW_DOWN] = ActionPriceSettings(200e18, 0.33e18, 0.2e18);
+        actionSettings[ActionType.SPEED_UP] = ActionSettings(10e18, 0.33e18, 2e18, 10);
+        actionSettings[ActionType.SLOW_DOWN] = ActionSettings(200e18, 0.33e18, 0.2e18, 5);
     }
     
     /*//////////////////////////////////////////////////////////////
                   ELEVATOR GAME STRUCTS AND STORAGE
     //////////////////////////////////////////////////////////////*/
     
-    enum ElevatorStatus { Idle, GoingUp, GoingDown, Opening, Closing, Undefined }
+    enum ElevatorStatus { Idle, GoingUp, GoingDown, Opening, Closing, Waiting, Undefined }
     enum ElevatorLight { Off, Up, Down }
     enum FloorButtons { Off, Up, Down, Both }
     
@@ -145,10 +154,14 @@ contract SolidityElevatorCTF {
                     GAME ROOMS STRUCTS AND STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    enum GameRoomStatus { Uninitialized, Created, Ready, FinishedWithWinner, FinishedWithoutWinner, Cancelled }
+    enum GameRoomStatus { Uninitialized, Created, Ready, FinishedWithWinner, FinishedWithoutWinner, Cancelled, Timeout }
 
     struct GameRoom {
         GameRoomStatus status;
+        uint8 numberOfPlayers;
+        uint8 floors;
+        uint8 scoreToWin;
+        uint32 deadline;
         address[] players;
         uint8[] indices;
         address[] offchainPublicKeys;
@@ -163,6 +176,9 @@ contract SolidityElevatorCTF {
     mapping(uint256 => ElevatorData[]) private elevatorsData;
     mapping(uint256 => FloorPassengerData[]) private floorPassengersData;
 
+    error NotJoined();
+    error WrongSettings();
+    error WrongElevatorInterface();
     error GameRoomUnavailable(uint256 id);
     error GameRoomPlayerAlreadyJoined(uint256 id, address player);
     error GameRoomElevatorAlreadyJoined(uint256 id, address elevator);
@@ -172,54 +188,131 @@ contract SolidityElevatorCTF {
                         GAME ROOM MANAGMENT
     //////////////////////////////////////////////////////////////*/
 
-    //TODO: Add functions to exit room before start
-    //TODO: Add function to close room (only creator) before start
-
-    function getGameRoom(uint256 id) public view returns (GameRoom memory) {
+    function getGameRoom(uint256 id) external view returns (GameRoom memory) {
         GameRoom memory _room = gameRooms[id];
         if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
+        if (_room.status == GameRoomStatus.Created || _room.status != GameRoomStatus.Ready) {
+            if (block.timestamp > _room.deadline) {
+                _room.status = GameRoomStatus.Timeout;
+            }
+        }
         return _room;
     }
-    
-    function createGameRoom(Elevator elevator, address offchainPublicKey) external {
+
+    function createGameRoom(uint8 numberOfPlayers, uint8 floors, uint8 scoreToWin, Elevator elevator, address offchainPublicKey) external {
+        if (numberOfPlayers == 0 || numberOfPlayers > MAX_PLAYERS) { revert WrongSettings(); }
+        if (floors < MIN_FLOORS || floors > MAX_FLOORS) { revert WrongSettings(); }
+        if (scoreToWin < MIN_SCORE_TO_WIN || scoreToWin > MAX_SCORE_TO_WIN) { revert WrongSettings(); }
+        if (!elevator.supportsInterface(type(IElevator).interfaceId)) { revert WrongElevatorInterface(); }
 
         address[] memory _players = new address[](1);
         uint8[] memory _indices = new uint8[](1);
         address[] memory _offchainPublicKeys = new address[](1);
-        uint64[2] memory _randomSeed;
+        uint256[ACTIONS_TYPES] memory _actionsSold;
 
         _players[0] = msg.sender;
         _indices[0] = 0;
         _offchainPublicKeys[0] = offchainPublicKey;
 
-        //TODO: Check if elevator is indeed an elevator contract
         elevatorsData[totalGameRooms].push(initialElevatorData(elevator));
         
-        uint256[2] memory _startActionsSold;
-        GameRoom memory _room = GameRoom(
-            GameRoomStatus.Created,
-            _players,
-            _indices,
-            _offchainPublicKeys,
-            1, 0,
-            _randomSeed,
-            _startActionsSold
-        );   
-        gameRooms[totalGameRooms] = _room;
+        if (numberOfPlayers == 1) {
+            uint8[] memory _passengers;
+            for (uint256 i = 0; i < floors; i++) {
+                floorPassengersData[totalGameRooms].push(FloorPassengerData(_passengers));
+            }
+
+            //TODO: Replace with better Entropy Generation or VRF?
+            uint64[2] memory _firstSeed = DRNG.seed(uint64(uint256(blockhash(block.number - 1))));
+
+            GameRoom memory _room = GameRoom(
+                GameRoomStatus.Ready,
+                numberOfPlayers,
+                floors,
+                scoreToWin,
+                uint32(block.timestamp) + MAX_ROOM_TIME,
+                _players,
+                _indices,
+                _offchainPublicKeys,
+                1, 0,
+                _firstSeed,
+                _actionsSold
+            );   
+            gameRooms[totalGameRooms] = _room;
+        } else {
+            uint64[2] memory _emptySeed;
+            GameRoom memory _room = GameRoom(
+                GameRoomStatus.Created,
+                numberOfPlayers,
+                floors,
+                scoreToWin,
+                uint32(block.timestamp) + MAX_ROOM_TIME,
+                _players,
+                _indices,
+                _offchainPublicKeys,
+                1, 0,
+                _emptySeed,
+                _actionsSold
+            );   
+            gameRooms[totalGameRooms] = _room;
+        }
 
         emit GameRoomCreated(totalGameRooms, msg.sender);
         totalGameRooms++;
+    }
+
+    function exitGameRoom(uint256 id) external {
+        GameRoom storage _room = gameRooms[id];
+
+        if (_room.status == GameRoomStatus.Ready) {
+            if (block.timestamp > _room.deadline) {
+                _room.status = GameRoomStatus.Timeout;
+                emit GameRoomTimeout(id);
+            }
+        } else if (_room.status == GameRoomStatus.Created) {
+            if (block.timestamp > _room.deadline) {
+                _room.status = GameRoomStatus.Timeout;
+                emit GameRoomTimeout(id);
+                return;
+            }
+            if (_room.players[0] == msg.sender) { 
+                _room.status = GameRoomStatus.Cancelled;
+                emit GameRoomCancelled(id);
+            } else {
+                uint8 _playerIndex;
+                for (uint8 i=1; i<_room.players.length; i++) {
+                    if (_room.players[i] == msg.sender) {
+                        _playerIndex = i;
+                    }
+                }
+                if (_playerIndex == 0) { revert NotJoined(); }
+                _room.players[_playerIndex] = _room.players[_room.players.length-1];
+                _room.players.pop();
+                _room.offchainPublicKeys[_playerIndex] = _room.offchainPublicKeys[_room.players.length-1];
+                _room.offchainPublicKeys.pop();
+                _room.indices.pop();
+                emit GameRoomPlayerLeft(id, msg.sender);
+            }
+        } else {
+            revert GameRoomUnavailable(id);
+        }
     }
 
     function joinGameRoom(uint256 id, Elevator elevator, address offchainPublicKey) external {
 
         GameRoom storage _room = gameRooms[id];
         if (_room.status != GameRoomStatus.Created) { revert GameRoomUnavailable(id); }
-        
+        if (!elevator.supportsInterface(type(IElevator).interfaceId)) { revert WrongElevatorInterface(); }
+
+        if (block.timestamp > _room.deadline) {
+            _room.status = GameRoomStatus.Timeout;
+            emit GameRoomTimeout(id);
+            return;
+        }
+
         ElevatorData[] storage _elevatorsData = elevatorsData[id];
         
         uint256 _newPlayerIndex = _room.players.length;
-
         for (uint256 i=0; i<_newPlayerIndex; i++) {
             if (_room.players[i] == msg.sender) { revert GameRoomPlayerAlreadyJoined(id, msg.sender); }
             if (_elevatorsData[i].elevator == elevator) { revert GameRoomElevatorAlreadyJoined(id, address(elevator)); }
@@ -229,24 +322,22 @@ contract SolidityElevatorCTF {
         _room.indices.push(uint8(_newPlayerIndex));
         _room.offchainPublicKeys.push(offchainPublicKey);
 
-        //TODO: Check if elevator is indeed a valid elevator contract
-        //TODO: Any way to check for unique bytecode?
         elevatorsData[id].push(initialElevatorData(elevator));
         
-        emit GameRoomJoined(id, msg.sender);
+        emit GameRoomPlayerJoined(id, msg.sender);
 
-        if (_newPlayerIndex == (PLAYERS - 1)) {
+        if (_newPlayerIndex == (_room.numberOfPlayers - 1)) {
 
             uint8[] memory _passengers;
-            for (uint256 i = 0; i < FLOORS; i++) {
+            for (uint256 i = 0; i < _room.floors; i++) {
                 floorPassengersData[id].push(FloorPassengerData(_passengers));
             }
 
-            //TODO: Replace with better Entropy Generation or VRF
+            //TODO: Replace with better Entropy Generation or VRF?
             uint64[2] memory _firstSeed = DRNG.seed(uint64(uint256(blockhash(block.number - 1))));
             (uint64 _firstRandom, uint64[2] memory _nextSeed) = DRNG.next(_firstSeed);
 
-            uint8[] memory _newIndices = shuffledIndices(_firstRandom, PLAYERS);
+            uint8[] memory _newIndices = shuffledIndices(_firstRandom, _room.numberOfPlayers);
             _room.indices = _newIndices;
             _room.randomSeed = _nextSeed;
 
@@ -276,7 +367,7 @@ contract SolidityElevatorCTF {
             for (uint16 t=0; t<turnsToPlay; t++) {
 
                 // First, get the elevator playing this turn
-                uint8 _currentElevatorId = _room.indices[(_room.turn - 1) % PLAYERS];
+                uint8 _currentElevatorId = _room.indices[(_room.turn - 1) % _room.numberOfPlayers];
 
                 // Then, calculate a new random number for this turn
                 (uint64 _random, uint64[2] memory _nextSeed) = DRNG.next(_room.randomSeed);
@@ -285,7 +376,7 @@ contract SolidityElevatorCTF {
                 // Now use randomness to see if a new waiting passenger needs to be created
                 (bool _createNewPassenger, uint8 _startFloor, uint8 _targetFloor) = newPassenger(
                     _random,
-                    FLOORS,
+                    _room.floors,
                     _room.waitingPassengers,
                     MAX_WAITING_PASSENGERS,
                     NEW_PASSENGERS_SPAWN_RATE
@@ -320,48 +411,92 @@ contract SolidityElevatorCTF {
                     _elevatorInfo,
                     _floorButtons
                 ) {
+                    // If the call was successfull, load the update from storage
+                    ElevatorUpdate memory _update = _elevatorsData[_currentElevatorId].elevator.getLastUpdate();
 
-                    //TODO: Process purchases 
+                    // Try to purchase actions if required in the update
+                    if (_update.amount > 0) {
+                        uint256 _cost = getActionCost(gameRoomId, _update.action, _update.amount);
+                        if (_elevatorsData[_currentElevatorId].balance >= _cost) {
 
-                } catch {}
+                            uint8 _value = actionSettings[_update.action].value;
 
-                /*
-                Car[] memory allCars = cars; // Get and cache the cars.
+                            //Only purchase and execute the actions if within speed limits: (0 <= speed <= ELEVATOR_MAX_SPEED)
 
-                uint256 currentTurn = turns; // Get and cache the current turn.
-
-                // Get the current car by moduloing the turns variable by the player count.
-                Car currentTurnCar = allCars[currentTurn % PLAYERS_REQUIRED];
-
-                // Get all car data and the current turn car's index so we can pass it via takeYourTurn.
-                (CarData[] memory allCarData, uint256 yourCarIndex) = getAllCarDataAndFindCar(currentTurnCar);
-
-                currentCar = currentTurnCar; // Set the current car temporarily.
-
-                // Call the car to have it take its turn with a max of 2 million gas, and catch any errors that occur.
-                
-
-                delete currentCar; // Restore the current car to the zero address.
-
-                // Loop over all of the cars and update their data.
-                for (uint256 i = 0; i < PLAYERS_REQUIRED; i++) {
-                    Car car = allCars[i]; // Get the car.
-
-                    // Get a pointer to the car's data struct.
-                    CarData storage carData = getCarData[car];
-
-                    // If the car is now past the finish line after moving:
-                    if ((carData.y += carData.speed) >= FINISH_DISTANCE) {
-                        emit Dub(currentTurn, car); // It won.
-
-                        state = State.DONE;
-
-                        return; // Exit early.
+                            if ((_update.action == ActionType.SPEED_UP) && (_elevatorsData[_currentElevatorId].speed < ELEVATOR_MAX_SPEED)) {
+                                _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
+                                if (_elevatorsData[_currentElevatorId].speed + _value <= ELEVATOR_MAX_SPEED) {
+                                    _elevatorsData[_currentElevatorId].speed += _value;
+                                } else {
+                                    _elevatorsData[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
+                                }
+                            } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed > 0)) {
+                                _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
+                                if (_value >= _elevatorsData[_currentElevatorId].speed) {
+                                    _elevatorsData[_currentElevatorId].speed = 0;
+                                } else {
+                                    _elevatorsData[_update.target].speed -= _value;
+                                }
+                            }
+                        }
                     }
-                }
-                */
 
-               bool _won;
+                    //Light and data are always updated
+                    _elevatorsData[_currentElevatorId].light = _update.light;
+                    _elevatorsData[_currentElevatorId].data = _update.data;
+
+                    //Floor Queue can either be fully replaced, or be added to the current queue
+                    //In the second case, the floors are pushed intro storage
+                    if (_update.replaceFloorQueue) {
+
+                        //TODO: Delete all floors from storage
+                        _elevatorsData[_currentElevatorId].floorQueue = _update.floorQueue;
+                        _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
+                    } 
+                    
+                    if (_update.floorQueue.length > 0) {
+                        for (uint8 i=0; i<_update.floorQueue.length; i++) {
+                            elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
+                            _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
+                        }
+                    }
+                } catch {}
+               
+                //Now that the elevator has processed its turns, execute game logic depending on the
+
+                bool _won;
+
+                if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle) {
+
+                    //TODO: Continue to Closing when next action is ready
+
+                } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingUp) {
+
+                    //TODO: Continue to Opening when floor reached
+
+                } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingDown) {
+
+                    //TODO: Continue to Opening when floor reached
+
+                } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Opening) {
+               
+                    //TODO: Continue to Waiting or to Idle
+
+                } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Closing) {
+                    
+                    //TODO: Continue to next floor (Up or Down)
+
+                } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Waiting) {
+
+                    //TODO: Passengers go down and go into the elevator
+
+                    //TODO: When passengers go in, remove from floor storage and add to elevator storage
+                    //      Then recalculate floor light
+
+                    //TODO: When passengers go down, add to the score, check for win and update _topScoreElevators
+
+                    //TODO: Continue to Closing or to Idle
+                }
 
                 //After reaching SOFT_TURN_DEADLINE, the first player to reach first place (with score > second place) wins
                 if (!_won && _room.turn > SOFT_TURN_DEADLINE) {
@@ -374,8 +509,8 @@ contract SolidityElevatorCTF {
                 } else {
 
                     // Indices are shuffled every time all 3 (or more) players have finished a turn
-                    if (_room.turn % PLAYERS == 0) {
-                        uint8[] memory _newIndices = shuffledIndices(_random, PLAYERS);
+                    if (_room.turn % _room.numberOfPlayers == 0) {
+                        uint8[] memory _newIndices = shuffledIndices(_random, _room.numberOfPlayers);
                         _room.indices = _newIndices;
                         //console.log(" - Changed indices to: ", _room.indices[0], _room.indices[1], _room.indices[2]);
                     }
@@ -400,77 +535,6 @@ contract SolidityElevatorCTF {
     }
     
     /*//////////////////////////////////////////////////////////////
-                               ACTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /*
-    function buySpeedUp(uint256 gameRoom, uint8 player, uint256 amount) external returns (uint256 cost) {
-
-        cost = getAccelerateCost(amount); // Get the cost of the acceleration.
-
-        // Get a storage pointer to the calling car's data struct.
-        CarData storage car = getCarData[Car(msg.sender)];
-
-        car.balance -= cost.safeCastTo32(); // This will underflow if we cant afford.
-
-        unchecked {
-            car.speed += uint32(amount); // Increase their speed by the amount.
-
-            // Increase the number of accelerates sold.
-            getActionsSold[ActionType.ACCELERATE] += amount;
-        }
-
-        emit Accelerated(turns, Car(msg.sender), amount, cost);
-    }
-
-    function buyShell(uint256 amount) external onlyDuringActiveGame onlyCurrentCar returns (uint256 cost) {
-        require(amount != 0, "YOU_CANT_BUY_ZERO_SHELLS"); // Buying zero shells would make them free.
-
-        cost = getShellCost(amount); // Get the cost of the shells.
-
-        // Get a storage pointer to the calling car's data struct.
-        CarData storage car = getCarData[Car(msg.sender)];
-
-        car.balance -= cost.safeCastTo32(); // This will underflow if we cant afford.
-
-        uint256 y = car.y; // Retrieve and cache the car's y.
-
-        unchecked {
-            // Increase the number of shells sold.
-            getActionsSold[ActionType.SHELL] += amount;
-
-            Car closestCar; // Used to determine who to shell.
-            uint256 distanceFromClosestCar = type(uint256).max;
-
-            for (uint256 i = 0; i < PLAYERS; i++) {
-                CarData memory nextCar = getCarData[cars[i]];
-
-                // If the car is behind or on us, skip it.
-                if (nextCar.y <= y) continue;
-
-                // Measure the distance from the car to us.
-                uint256 distanceFromNextCar = nextCar.y - y;
-
-                // If this car is closer than all other cars we've
-                // looked at so far, we'll make it the closest one.
-                if (distanceFromNextCar < distanceFromClosestCar) {
-                    closestCar = nextCar.car;
-                    distanceFromClosestCar = distanceFromNextCar;
-                }
-            }
-
-            // If there is a closest car, shell it.
-            if (address(closestCar) != address(0)) {
-                // Set the speed to POST_SHELL_SPEED unless its already at that speed or below, as to not speed it up.
-                if (getCarData[closestCar].speed > POST_SHELL_SPEED) getCarData[closestCar].speed = POST_SHELL_SPEED;
-            }
-
-            emit Shelled(turns, Car(msg.sender), closestCar, amount, cost);
-        }
-    }
-    */
-
-    /*//////////////////////////////////////////////////////////////
                             ACTION PRICING
     //////////////////////////////////////////////////////////////*/
 
@@ -480,11 +544,11 @@ contract SolidityElevatorCTF {
         unchecked {
             for (uint256 i = 0; i < amount; i++) {
                 sum += computeActionPrice(
-                    actionPriceSettings[action].targetPrice,
-                    actionPriceSettings[action].perTurnDecrease,
+                    actionSettings[action].targetPrice,
+                    actionSettings[action].perTurnDecrease,
                     _room.turn,
                     _room.actionsSold[uint256(action)] + i,
-                    actionPriceSettings[action].sellPerTurn
+                    actionSettings[action].sellPerTurn
                 );
             }
         }

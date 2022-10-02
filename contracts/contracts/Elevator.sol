@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+import "./IElevator.sol";
 import "./SolidityElevatorCTF.sol";
 
-abstract contract Elevator {
-    SolidityElevatorCTF internal immutable SECTF;
+abstract contract Elevator is IElevator {
+    SolidityElevatorCTF.ElevatorUpdate private lastUpdate;
 
-    constructor(SolidityElevatorCTF _sectf) {
-        SECTF = _sectf;
+    function getLastUpdate() public view returns (SolidityElevatorCTF.ElevatorUpdate memory) {
+        return lastUpdate;
     }
 
-    SolidityElevatorCTF.ElevatorUpdate lastUpdate;
+    function supportsInterface(bytes4 interfaceId) public view returns (bool) {
+        return interfaceId == type(IElevator).interfaceId;
+    }
 
     function playTurnOffChain(
         uint256 gameRoomId,
