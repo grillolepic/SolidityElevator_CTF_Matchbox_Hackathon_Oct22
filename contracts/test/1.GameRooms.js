@@ -2,7 +2,7 @@ const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
 
-describe("Game Room managment", function () {
+describe("GameRooms", function () {
   
   async function initialize() {
     const [owner, player1, player2, player3, player4] = await ethers.getSigners();
