@@ -50,6 +50,7 @@ contract SolidityElevatorCTF {
     
     uint8 private constant ELEVATOR_INITIAL_SPEED = 10;
     uint8 private constant ELEVATOR_MAX_SPEED = 100;
+    uint8 private constant ELEVATOR_MAX_FLOOR_QUEUE = 8;
     uint16 private constant ELEVATOR_INITIAL_POSITION = 0;
     uint32 private constant ELEVATOR_INITIAL_BALANCE = 15000;
 
@@ -280,7 +281,7 @@ contract SolidityElevatorCTF {
                 emit GameRoomCancelled(id);
             } else {
                 uint8 _playerIndex;
-                for (uint8 i=1; i<_room.players.length; i++) {
+                for (uint256 i=1; i<_room.players.length; i++) {
                     if (_room.players[i] == msg.sender) {
                         _playerIndex = i;
                     }
@@ -452,16 +453,18 @@ contract SolidityElevatorCTF {
                             elevatorsData[gameRoomId][_currentElevatorId].floorQueue.pop();
                         }
                         //We then loop through the update queue and update the storage (pushing or replacing)
-                        for (uint8 i=0; i<_update.floorQueue.length; i++) {
+                        for (uint256 i=0; i<_update.floorQueue.length; i++) {
                             if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length > i) {
                                 elevatorsData[gameRoomId][_currentElevatorId].floorQueue[i] = _update.floorQueue[i];
                             } else {
+                                if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
                                 elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
                             }
                         }
                     } else {
                         //If update queue only asks to be added to the current queue, we just loop and push to storage
-                        for (uint8 i=0; i<_update.floorQueue.length; i++) {
+                        for (uint256 i=0; i<_update.floorQueue.length; i++) {
+                            if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
                             elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
                         }
                     }
@@ -470,13 +473,32 @@ contract SolidityElevatorCTF {
 
                 } catch {}
                
-                //Now that the elevator has processed its turns, execute game logic depending on the
-
+                //Now that the elevator has processed its turns, execute game logic depending on the current elevator state
+                //In the process, check if the elevator has won (by achieving target score)
                 bool _won;
 
+                //Elevator is Idle while doors are open, no floorTarget is set and no passenger is available to go in or out of the elevator
                 if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle) {
 
+                    //First check if passangers are available to get into the elevator
+                    (bool _passengersToGetIn, uint8 _targetPassengerFloor) = (false, 0); //TODO: Check if available
+
+                    //If there's a passanger available to get in, make it go into the elevator and change Status to Waiting
+                    if (_passengersToGetIn) {
+                        //TODO: Push passenger into elevator
+                        //TODO: Remove passanger from floor
+                        _elevatorsData[_currentElevatorId].status = ElevatorStatus.Waiting;
+                    } else {
+                        if (_elevatorsData[_currentElevatorId].floorQueue.length > 0) {
+                            _elevatorsData[_currentElevatorId].targetFloor = _elevatorsData[_currentElevatorId].floorQueue[0];
+                            shiftArray(elevatorsData[gameRoomId][_currentElevatorId].floorQueue);
+                            _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
+                            _elevatorsData[_currentElevatorId].status = ElevatorStatus.Closing;
+                        }
+                    }
+                    
                     //TODO: Continue to Closing when next action is ready
+                    
 
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingUp) {
 
@@ -586,7 +608,7 @@ contract SolidityElevatorCTF {
         unchecked {
             uint8[] memory _result = new uint8[](totalPlayers);
             uint8 _nextIndex = uint8(random % totalPlayers);
-            for (uint8 i=0; i<totalPlayers; i++) {
+            for (uint256 i=0; i<totalPlayers; i++) {
                 _result[i] = _nextIndex;
                 _nextIndex += 1;
                 if (_nextIndex >= totalPlayers) { _nextIndex = 0; }
@@ -629,7 +651,7 @@ contract SolidityElevatorCTF {
 
             uint8[] memory _topScores = new uint8[](_maxScoreCount);
             uint8 _idx = 0;
-            for (uint8 i=0; i<elevData.length; i++) {
+            for (uint256 i=0; i<elevData.length; i++) {
                 if (elevData[i].score == _maxScore) {
                     _topScores[_idx] = i;
                     _idx++;
@@ -660,7 +682,7 @@ contract SolidityElevatorCTF {
     function buildElevatorsInfo(ElevatorData[] memory elevData, uint8 currentElevator) private pure returns (ElevatorInfo[] memory) {
         unchecked {
             ElevatorInfo[] memory _elevatorsInfo = new ElevatorInfo[](elevData.length);
-            for (uint8 i=0; i<elevData.length; i++) {
+            for (uint256 i=0; i<elevData.length; i++) {
                 if (i == currentElevator) {
                     //For the current playing elevator, we provide the full elevator data
                     _elevatorsInfo[i] = ElevatorInfo(
@@ -694,5 +716,12 @@ contract SolidityElevatorCTF {
             }
             return _elevatorsInfo;
         }
+    }
+
+    function shiftArray(uint8[] storage arr) private {
+        for (uint256 i=1; i<arr.length; i++) {
+            arr[i-1] = arr[i];
+        }
+        arr.pop();
     }
 }
