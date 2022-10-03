@@ -12,6 +12,7 @@ interface IElevator {
         uint8 scoreToWin,
         uint8[] memory topScoreElevators,
         uint16 turn,
+        uint256[2] memory actionsSold,
         SolidityElevatorCTF.ElevatorInfo[] memory elevatorsInfo,
         SolidityElevatorCTF.FloorButtons[] memory floorButtons
     ) external;

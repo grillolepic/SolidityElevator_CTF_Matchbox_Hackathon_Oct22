@@ -31,6 +31,9 @@ import "./Elevator.sol";
 
 
 contract ExampleElevator is Elevator {
+
+    constructor(SolidityElevatorCTF _solidityElevatorCtf) Elevator(_solidityElevatorCtf) {}
+
     function playTurnOffChain(
         uint8 myId,
         uint8 numberOfPlayers,
@@ -38,9 +41,39 @@ contract ExampleElevator is Elevator {
         uint8 scoreToWin,
         uint8[] memory topScoreElevators,
         uint16 turn,
+        uint256[2] memory actionsSold,
         SolidityElevatorCTF.ElevatorInfo[] memory elevInfo,
         SolidityElevatorCTF.FloorButtons[] memory floorButtons
     ) override public view returns(SolidityElevatorCTF.ElevatorUpdate memory) {
+
+        uint256 _speedUpCost = SE.getActionCost(turn, actionsSold[uint256(SolidityElevatorCTF.ActionType.SPEED_UP)], SolidityElevatorCTF.ActionType.SPEED_UP, 10);
+        uint256 _slowDownCost = SE.getActionCost(turn, actionsSold[uint256(SolidityElevatorCTF.ActionType.SLOW_DOWN)], SolidityElevatorCTF.ActionType.SLOW_DOWN, 5);
+
+        SolidityElevatorCTF.ActionType _actionType = SolidityElevatorCTF.ActionType.SPEED_UP;
+        uint256 _amount;
+        uint8 _target;
+
+        if (elevInfo[myId].balance >= 50) {
+
+            if (elevInfo[myId].speed < 100 && _speedUpCost <= 50) {
+                _amount = 10;
+
+            } else if (_slowDownCost <= 50) {
+                bool _winning = (topScoreElevators.length == 1 && topScoreElevators[0] == myId);
+                if (!_winning) {
+
+                    _actionType = SolidityElevatorCTF.ActionType.SLOW_DOWN;
+                    _amount = 5;
+
+                    for (uint256 i=0; i<topScoreElevators.length; i++) {
+                        if (topScoreElevators[i] != myId) {
+                            _target = uint8(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         if (elevInfo[myId].floorQueue.length == 0 && (
             elevInfo[myId].status == SolidityElevatorCTF.ElevatorStatus.Idle ||
@@ -57,9 +90,9 @@ contract ExampleElevator is Elevator {
                 SolidityElevatorCTF.ElevatorLight.Off,
                 false,
                 _addToQueue,
-                SolidityElevatorCTF.ActionType.SPEED_UP,
-                0,
-                0,
+                _actionType,
+                _amount,
+                _target,
                 elevInfo[myId].data
             );
         }
@@ -68,9 +101,9 @@ contract ExampleElevator is Elevator {
             elevInfo[myId].light,
             false,
             new uint8[](0),
-            SolidityElevatorCTF.ActionType.SPEED_UP,
-            0,
-            0,
+            _actionType,
+            _amount,
+            _target,
             elevInfo[myId].data
         );
     }

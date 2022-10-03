@@ -37,7 +37,7 @@ contract SolidityElevatorCTF {
     uint8 private constant MAX_PLAYERS = 4;
     uint8 private constant MIN_FLOORS = 4;
     uint8 private constant MAX_FLOORS = 8;
-    uint8 private constant MIN_SCORE_TO_WIN = 10;
+    uint8 private constant MIN_SCORE_TO_WIN = 1;
     uint8 private constant MAX_SCORE_TO_WIN = 100;
     uint32 private constant MAX_ROOM_TIME = 1 hours;
 
@@ -68,14 +68,13 @@ contract SolidityElevatorCTF {
         int256 targetPrice;
         int256 perTurnDecrease;
         int256 sellPerTurn;
-        uint8 value;
     }
 
     mapping (ActionType => ActionSettings) internal actionSettings;
 
     constructor() {
-        actionSettings[ActionType.SPEED_UP] = ActionSettings(10e18, 0.33e18, 2e18, 10);
-        actionSettings[ActionType.SLOW_DOWN] = ActionSettings(200e18, 0.33e18, 0.2e18, 5);
+        actionSettings[ActionType.SPEED_UP] = ActionSettings(100e18, 0.01e18, 0.5e18);
+        actionSettings[ActionType.SLOW_DOWN] = ActionSettings(100e18, 0.01e18, 0.5e18);
     }
     
     /*//////////////////////////////////////////////////////////////
@@ -356,8 +355,14 @@ contract SolidityElevatorCTF {
 
         GameRoom memory _room = gameRooms[gameRoomId];
         ElevatorData[] memory _elevatorsData = elevatorsData[gameRoomId];
-        
+    
         if (_room.status > GameRoomStatus.Ready) { revert GameRoomPlayOnFinished(gameRoomId); }
+
+        if (block.timestamp > _room.deadline) {
+            _room.status = GameRoomStatus.Timeout;
+            emit GameRoomTimeout(gameRoomId);
+            return;
+        }
 
         FloorButtons[] memory _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
         uint8[] memory _topScoreElevators = calculateTopScoreElevators(_elevatorsData);
@@ -367,8 +372,6 @@ contract SolidityElevatorCTF {
 
                 // First, get the elevator playing this turn
                 uint8 _currentElevatorId = _room.indices[(_room.turn - 1) % _room.numberOfPlayers];
-
-                console.log(" - TURN", _room.turn, "- Elevator", _currentElevatorId);
 
                 // Then, calculate a new random number for this turn
                 (uint64 _random, uint64[2] memory _nextSeed) = DRNG.next(_room.randomSeed);
@@ -385,9 +388,6 @@ contract SolidityElevatorCTF {
                 
                 // If a passenger needs to be added, push it into storage and update elevator lights
                 if (_createNewPassenger) {
-
-                    console.log("   - New passenger created in Floor", _startFloor, "going to Floor", _targetFloor);
-
                     floorPassengersData[gameRoomId][_startFloor].passengers.push(_targetFloor);
                     if (_floorButtons[_startFloor] == FloorButtons.Off) {
                         _floorButtons[_startFloor] = (_startFloor < _targetFloor)?FloorButtons.Up:FloorButtons.Down;
@@ -418,6 +418,7 @@ contract SolidityElevatorCTF {
                     _room.scoreToWin,
                     _topScoreElevators,
                     _room.turn,
+                    _room.actionsSold,
                     _elevatorInfo,
                     _floorButtons
                 ) {
@@ -426,26 +427,30 @@ contract SolidityElevatorCTF {
 
                     // Try to purchase actions if required in the update
                     if (_update.amount > 0) {
-                        uint256 _cost = getActionCost(gameRoomId, _update.action, _update.amount);
+                        uint256 _cost = getActionCost(_room.turn, _room.actionsSold[uint256(_update.action)], _update.action, _update.amount);
                         if (_elevatorsData[_currentElevatorId].balance >= _cost) {
-
-                            uint8 _value = actionSettings[_update.action].value;
 
                             //Only purchase and execute the actions if within speed limits: (0 <= speed <= ELEVATOR_MAX_SPEED)
 
                             if ((_update.action == ActionType.SPEED_UP) && (_elevatorsData[_currentElevatorId].speed < ELEVATOR_MAX_SPEED)) {
+
                                 _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
-                                if (_elevatorsData[_currentElevatorId].speed + _value <= ELEVATOR_MAX_SPEED) {
-                                    _elevatorsData[_currentElevatorId].speed += _value;
+                                _room.actionsSold[uint256(ActionType.SPEED_UP)] += _update.amount;
+
+                                if (_elevatorsData[_currentElevatorId].speed + _update.amount <= ELEVATOR_MAX_SPEED) {
+                                    _elevatorsData[_currentElevatorId].speed += uint8(_update.amount);
                                 } else {
                                     _elevatorsData[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
                                 }
                             } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed > 0)) {
+
                                 _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
-                                if (_value >= _elevatorsData[_currentElevatorId].speed) {
+                                _room.actionsSold[uint256(ActionType.SLOW_DOWN)] += _update.amount;
+
+                                if (_update.amount >= _elevatorsData[_currentElevatorId].speed) {
                                     _elevatorsData[_currentElevatorId].speed = 0;
                                 } else {
-                                    _elevatorsData[_update.target].speed -= _value;
+                                    _elevatorsData[_update.target].speed -= uint8(_update.amount);
                                 }
                             }
                         }
@@ -473,14 +478,9 @@ contract SolidityElevatorCTF {
                     } else {
                         //If update queue only asks to be added to the current queue, we just loop and push to storage
                         for (uint256 i=0; i<_update.floorQueue.length; i++) {
-
-                            console.log("   - Floor", _update.floorQueue[i], "added to queue");
-
                             if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
                             elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
                         }
-
-                        console.log("   - New queue length", _update.floorQueue.length);
                     }
                     
                     //We finally copy the updated storage to memory
@@ -506,12 +506,6 @@ contract SolidityElevatorCTF {
                 if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle ||
                     _elevatorsData[_currentElevatorId].status == ElevatorStatus.Waiting) {                   
 
-                    if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle) {
-                        console.log("  - Elevator status is 'Idle'");
-                    } else {
-                        console.log("  - Elevator status is 'Waiting'");
-                    }
-
                     uint8 _currentFloor = currentFloor(_elevatorsData[_currentElevatorId]);
 
                     //First check if there are passengers to get out of the elevator
@@ -528,7 +522,6 @@ contract SolidityElevatorCTF {
                         if (_elevatorsData[_currentElevatorId].score == _room.scoreToWin) {
                             _won = true;
                         }
-
                         // 3) Update _topScoreElevators
                         _topScoreElevators = calculateTopScoreElevators(_elevatorsData);
                     } else {
@@ -543,9 +536,6 @@ contract SolidityElevatorCTF {
                         );
 
                         if (_passengersToGetIn) {
-
-                            console.log("    - A passenger going to Floor", floorPassengersData[gameRoomId][_currentFloor].passengers[_targetPassengerIndex], "got into the elevator");
-
                             //If there's a passanger available to get in:
                             // 1) Push it into the elevator (storage) and Pop it from the floor (storage)
                             elevatorsData[gameRoomId][_currentElevatorId].passengers.push(
@@ -558,7 +548,6 @@ contract SolidityElevatorCTF {
                             // 3) Recalculate Floor Buttons
                             _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
                         } else {
-
                             //If there's no passenger to get in, check if there's a floor in the queue (!= from current floor)
 
                             bool _hasChangedTargetFloor;
@@ -573,7 +562,6 @@ contract SolidityElevatorCTF {
                                 // 3) Make sure target floor is different from current floor before breaking the loop
                                 if (_elevatorsData[_currentElevatorId].targetFloor != _currentFloor) {
                                     _hasChangedTargetFloor = true;
-                                    console.log("     - Elevator changed target Floor to", _elevatorsData[_currentElevatorId].targetFloor);
                                     break;
                                 }
                             }
@@ -586,23 +574,16 @@ contract SolidityElevatorCTF {
                         }
                     }
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingUp) {
-
-                    console.log("  - Elevator status is 'GoingUp'");
-
                     //Just increase the elevator's position until it reaches the targetFloor
                     //When reached, set status to 'Opening'
+
                     _elevatorsData[_currentElevatorId].y += _elevatorsData[_currentElevatorId].speed;
-                    if (_elevatorsData[_currentElevatorId].y >= (_elevatorsData[_currentElevatorId].targetFloor * 100)) {
-                        _elevatorsData[_currentElevatorId].y = _elevatorsData[_currentElevatorId].targetFloor * 100;
+                    if (_elevatorsData[_currentElevatorId].y >= (uint16(_elevatorsData[_currentElevatorId].targetFloor) * 100)) {
+                        _elevatorsData[_currentElevatorId].y = uint16(_elevatorsData[_currentElevatorId].targetFloor) * 100;
                         _elevatorsData[_currentElevatorId].status = ElevatorStatus.Opening;
                     }
 
-                    console.log("     - Elevator's new position is ", _elevatorsData[_currentElevatorId].y);
-
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingDown) {
-
-                    console.log("  - Elevator status is 'GoingDown'");
-
                     //Just decrease the elevator's position until it reaches the targetFloor
                     //(Being careful not to underflow!)
                     //When reached, set status to 'Opening'
@@ -615,19 +596,12 @@ contract SolidityElevatorCTF {
                         _elevatorsData[_currentElevatorId].y = _elevatorsData[_currentElevatorId].targetFloor * 100;
                         _elevatorsData[_currentElevatorId].status = ElevatorStatus.Opening;
                     }
-
-                    console.log("     - Elevator's new position is ", _elevatorsData[_currentElevatorId].y);
-
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Opening) {
-               
-                    console.log("  - Elevator status is 'Opening'");
 
                     //'Opening' can only lead to 'Waiting'
                     _elevatorsData[_currentElevatorId].status = ElevatorStatus.Waiting;
 
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Closing) {
-                    
-                    console.log("  - Elevator status is 'Closing'");
 
                     //Change Status to 'GoingUp' or 'GoingDown' depending on currentFloor and targetFloor
                     uint8 _currentFloor = currentFloor(_elevatorsData[_currentElevatorId]);
@@ -646,7 +620,8 @@ contract SolidityElevatorCTF {
                 //////////////////////////////////////////////////////
 
                 //After reaching SOFT_TURN_DEADLINE, the first player to reach first place (with score > second place) wins
-                if (!_won && _room.turn > SOFT_TURN_DEADLINE) {
+                //This is only valid if number of players > 1
+                if (!_won && _room.turn > SOFT_TURN_DEADLINE && _room.numberOfPlayers > 1) {
                     _won = (_topScoreElevators.length == 1);
                 }
 
@@ -659,7 +634,6 @@ contract SolidityElevatorCTF {
                     if (_room.turn % _room.numberOfPlayers == 0) {
                         uint8[] memory _newIndices = shuffledIndices(_random, _room.numberOfPlayers);
                         _room.indices = _newIndices;
-                        //console.log(" - Changed indices to: ", _room.indices[0], _room.indices[1], _room.indices[2]);
                     }
 
                     _room.turn++;
@@ -669,8 +643,6 @@ contract SolidityElevatorCTF {
                         break;
                     }
                 }
-
-                console.log("");
             }
 
             //After finishing the loop, save memory variables to storage
@@ -698,18 +670,17 @@ contract SolidityElevatorCTF {
                             ACTION PRICING
     //////////////////////////////////////////////////////////////*/
 
-    function getActionCost(uint256 gameRoomId, ActionType action, uint256 amount) public view returns (uint256 sum) {
-        GameRoom memory _room = gameRooms[gameRoomId];
-        
+    function getActionCost(uint16 turn, uint256 actionsSold, ActionType action, uint256 amount) public view returns (uint256 sum) {
         unchecked {
             for (uint256 i = 0; i < amount; i++) {
-                sum += computeActionPrice(
+                uint256 val = computeActionPrice(
                     actionSettings[action].targetPrice,
                     actionSettings[action].perTurnDecrease,
-                    _room.turn,
-                    _room.actionsSold[uint256(action)] + i,
+                   uint256(turn),
+                    actionsSold + i,
                     actionSettings[action].sellPerTurn
                 );
+                sum += val;
             }
         }
     }

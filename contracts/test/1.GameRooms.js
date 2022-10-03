@@ -39,7 +39,7 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
       await SECTF.connect(player1).exitGameRoom(0);
 
@@ -54,7 +54,7 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       try {
@@ -70,7 +70,7 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       randomWallet = ethers.Wallet.createRandom();
@@ -87,20 +87,20 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy();
+      const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
       await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
 
       randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy();
+      const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy(SECTF.address);
       await SECTF.connect(player3).joinGameRoom(0, ELEVATOR_3.address, randomWallet.address);
 
       try {
         randomWallet = ethers.Wallet.createRandom();
-        const ELEVATOR_4 = await exampleElevatorFactory.connect(player4).deploy();
+        const ELEVATOR_4 = await exampleElevatorFactory.connect(player4).deploy(SECTF.address);
         await SECTF.connect(player4).joinGameRoom(0, ELEVATOR_4.address, randomWallet.address);
       } catch (err) {
         expect(0).to.equal(0);
@@ -113,15 +113,15 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy();
+      const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
       await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
 
       randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy();
+      const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy(SECTF.address);
       await SECTF.connect(player3).joinGameRoom(0, ELEVATOR_3.address, randomWallet.address);
 
       let gameRoom = await SECTF.getGameRoom(0);
@@ -139,17 +139,17 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy();
+      const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
       await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
 
       await SECTF.connect(player2).exitGameRoom(0);
 
       randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy();
+      const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy(SECTF.address);
       await SECTF.connect(player3).joinGameRoom(0, ELEVATOR_3.address, randomWallet.address);
 
       let gameRoom = await SECTF.getGameRoom(0);
@@ -162,7 +162,7 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       await network.provider.send("evm_increaseTime", [100000000])
@@ -179,7 +179,7 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       await network.provider.send("evm_increaseTime", [100000000])
@@ -195,7 +195,7 @@ describe("GameRooms", function () {
       const exampleElevatorFactory = await ethers.getContractFactory("ExampleElevator");
 
       let randomWallet = ethers.Wallet.createRandom();
-      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
+      const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(1, 8, 100, ELEVATOR_1.address, randomWallet.address);
       await SECTF.connect(player1).exitGameRoom(0);
 
