@@ -16,8 +16,10 @@ abstract contract Elevator is IElevator {
     }
 
     function playTurnOffChain(
-        uint256 gameRoomId,
-        uint8 myElevatorId,
+        uint8 myId,
+        uint8 numberOfPlayers,
+        uint8 floors,
+        uint8 scoreToWin,
         uint8[] memory topScoreElevators,
         uint16 turn,
         SolidityElevatorCTF.ElevatorInfo[] memory elevatorsInfo,
@@ -25,16 +27,20 @@ abstract contract Elevator is IElevator {
     ) public view virtual returns (SolidityElevatorCTF.ElevatorUpdate memory);
 
     function playTurnOnChain(
-        uint256 gameRoomId,
-        uint8 myElevatorId,
+        uint8 myId,
+        uint8 numberOfPlayers,
+        uint8 floors,
+        uint8 scoreToWin,
         uint8[] memory topScoreElevators,
         uint16 turn,
         SolidityElevatorCTF.ElevatorInfo[] memory elevatorsInfo,
         SolidityElevatorCTF.FloorButtons[] memory floorButtons
     ) virtual external {
         lastUpdate = playTurnOffChain(
-            gameRoomId,
-            myElevatorId,
+            myId,
+            numberOfPlayers,
+            floors,
+            scoreToWin,
             topScoreElevators,
             turn,
             elevatorsInfo,

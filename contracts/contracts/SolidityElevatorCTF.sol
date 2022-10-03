@@ -127,7 +127,7 @@ contract SolidityElevatorCTF {
         bool replaceFloorQueue;
         uint8[] floorQueue;         // Floors to be added to the queue or to replace the queue (if replaceFloorQueue == true)
         ActionType action;          // Where 0 means the elevator has no money.
-        uint256 amount;             // Where 0 means the elevator is stuck and can't move.
+        uint256 amount;             // How much to purchase
         uint8 target;               // Target for the action (for SLOW_DOWN)
         bytes32 data;               // Arbitrary data to be updated;
     }
@@ -368,6 +368,8 @@ contract SolidityElevatorCTF {
                 // First, get the elevator playing this turn
                 uint8 _currentElevatorId = _room.indices[(_room.turn - 1) % _room.numberOfPlayers];
 
+                console.log(" - TURN", _room.turn, "- Elevator", _currentElevatorId);
+
                 // Then, calculate a new random number for this turn
                 (uint64 _random, uint64[2] memory _nextSeed) = DRNG.next(_room.randomSeed);
                 _room.randomSeed = _nextSeed;
@@ -383,6 +385,9 @@ contract SolidityElevatorCTF {
                 
                 // If a passenger needs to be added, push it into storage and update elevator lights
                 if (_createNewPassenger) {
+
+                    console.log("   - New passenger created in Floor", _startFloor, "going to Floor", _targetFloor);
+
                     floorPassengersData[gameRoomId][_startFloor].passengers.push(_targetFloor);
                     if (_floorButtons[_startFloor] == FloorButtons.Off) {
                         _floorButtons[_startFloor] = (_startFloor < _targetFloor)?FloorButtons.Up:FloorButtons.Down;
@@ -407,8 +412,10 @@ contract SolidityElevatorCTF {
                 // Elevator contract itself. This function then reads the update and updates local state following
                 // the game logic
                 try _elevatorsData[_currentElevatorId].elevator.playTurnOnChain{gas: MAX_GAS_FOR_ON_CHAIN_TURN}(
-                    gameRoomId,
                     _currentElevatorId,
+                    _room.numberOfPlayers,
+                    _room.floors,
+                    _room.scoreToWin,
                     _topScoreElevators,
                     _room.turn,
                     _elevatorInfo,
@@ -466,10 +473,16 @@ contract SolidityElevatorCTF {
                     } else {
                         //If update queue only asks to be added to the current queue, we just loop and push to storage
                         for (uint256 i=0; i<_update.floorQueue.length; i++) {
+
+                            console.log("   - Floor", _update.floorQueue[i], "added to queue");
+
                             if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
                             elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
                         }
+
+                        console.log("   - New queue length", _update.floorQueue.length);
                     }
+                    
                     //We finally copy the updated storage to memory
                     _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
 
@@ -489,8 +502,15 @@ contract SolidityElevatorCTF {
                 //  'Waiting' is the immediate status set after an elevator reaches a target floor and opens it's doors.
                 //  In this status, doors are open and passengers first get out, then get in. After all passengers have moved,
                 //  it should switch to 'Idle' if there's no next floor in queue or to 'Closing' if there is.
+
                 if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle ||
-                    _elevatorsData[_currentElevatorId].status == ElevatorStatus.Waiting) {
+                    _elevatorsData[_currentElevatorId].status == ElevatorStatus.Waiting) {                   
+
+                    if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle) {
+                        console.log("  - Elevator status is 'Idle'");
+                    } else {
+                        console.log("  - Elevator status is 'Waiting'");
+                    }
 
                     uint8 _currentFloor = currentFloor(_elevatorsData[_currentElevatorId]);
 
@@ -523,6 +543,9 @@ contract SolidityElevatorCTF {
                         );
 
                         if (_passengersToGetIn) {
+
+                            console.log("    - A passenger going to Floor", floorPassengersData[gameRoomId][_currentFloor].passengers[_targetPassengerIndex], "got into the elevator");
+
                             //If there's a passanger available to get in:
                             // 1) Push it into the elevator (storage) and Pop it from the floor (storage)
                             elevatorsData[gameRoomId][_currentElevatorId].passengers.push(
@@ -550,6 +573,7 @@ contract SolidityElevatorCTF {
                                 // 3) Make sure target floor is different from current floor before breaking the loop
                                 if (_elevatorsData[_currentElevatorId].targetFloor != _currentFloor) {
                                     _hasChangedTargetFloor = true;
+                                    console.log("     - Elevator changed target Floor to", _elevatorsData[_currentElevatorId].targetFloor);
                                     break;
                                 }
                             }
@@ -559,10 +583,11 @@ contract SolidityElevatorCTF {
                             
                             // 5) If a new valid target floor was set change status to 'Closing', if not, to 'Idle'
                             _elevatorsData[_currentElevatorId].status = _hasChangedTargetFloor?ElevatorStatus.Closing:ElevatorStatus.Idle;
-
                         }
                     }
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingUp) {
+
+                    console.log("  - Elevator status is 'GoingUp'");
 
                     //Just increase the elevator's position until it reaches the targetFloor
                     //When reached, set status to 'Opening'
@@ -572,7 +597,11 @@ contract SolidityElevatorCTF {
                         _elevatorsData[_currentElevatorId].status = ElevatorStatus.Opening;
                     }
 
+                    console.log("     - Elevator's new position is ", _elevatorsData[_currentElevatorId].y);
+
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingDown) {
+
+                    console.log("  - Elevator status is 'GoingDown'");
 
                     //Just decrease the elevator's position until it reaches the targetFloor
                     //(Being careful not to underflow!)
@@ -587,13 +616,19 @@ contract SolidityElevatorCTF {
                         _elevatorsData[_currentElevatorId].status = ElevatorStatus.Opening;
                     }
 
+                    console.log("     - Elevator's new position is ", _elevatorsData[_currentElevatorId].y);
+
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Opening) {
                
+                    console.log("  - Elevator status is 'Opening'");
+
                     //'Opening' can only lead to 'Waiting'
                     _elevatorsData[_currentElevatorId].status = ElevatorStatus.Waiting;
 
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Closing) {
                     
+                    console.log("  - Elevator status is 'Closing'");
+
                     //Change Status to 'GoingUp' or 'GoingDown' depending on currentFloor and targetFloor
                     uint8 _currentFloor = currentFloor(_elevatorsData[_currentElevatorId]);
                     if (_currentFloor < _elevatorsData[_currentElevatorId].targetFloor) {
@@ -634,6 +669,8 @@ contract SolidityElevatorCTF {
                         break;
                     }
                 }
+
+                console.log("");
             }
 
             //After finishing the loop, save memory variables to storage

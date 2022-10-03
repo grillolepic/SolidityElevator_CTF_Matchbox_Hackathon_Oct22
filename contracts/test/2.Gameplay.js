@@ -29,40 +29,21 @@ describe("Gameplay", function () {
     
         let randomWallet = ethers.Wallet.createRandom();
         const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy();
-        await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
-        
-        randomWallet = ethers.Wallet.createRandom();
-        const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy();
-        await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
-        
-        randomWallet = ethers.Wallet.createRandom();
-        const ELEVATOR_3 = await exampleElevatorFactory.connect(player3).deploy();
-        await SECTF.connect(player3).joinGameRoom(0, ELEVATOR_3.address, randomWallet.address);
+        await SECTF.connect(player1).createGameRoom(1, 8, 10, ELEVATOR_1.address, randomWallet.address);
         
         let gameRoom = await SECTF.getGameRoom(0);
         console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
   
-        let receipt = await SECTF.play(0, 100);
+        let receipt = await SECTF.play(0, 50);
         await receipt.wait();
-        console.log(`Gas spent moving 100 turns forwad: ${receipt.gasLimit.toString()}`);
+        console.log(`Gas spent moving 1 turns forwad: ${receipt.gasLimit.toString()}`);
         
+
         gameRoom = await SECTF.getGameRoom(0);
         console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
-  
-        receipt = await SECTF.play(0, 100);
-        await receipt.wait();
-        console.log(`Gas spent moving 100 turns forwad: ${receipt.gasLimit.toString()}`);
-  
-        gameRoom = await SECTF.getGameRoom(0);
-        console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
-  
-        receipt = await SECTF.play(0, 100);
-        await receipt.wait();
-        console.log(`Gas spent moving 100 turns forwad: ${receipt.gasLimit.toString()}`);
-  
-        gameRoom = await SECTF.getGameRoom(0);
-        console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
-  
+
+        //console.log(gameRoom);
+
         expect(gameRoom.turn).to.equal(301);
       });
   
