@@ -287,10 +287,8 @@ contract SolidityElevatorCTF {
                     }
                 }
                 if (_playerIndex == 0) { revert NotJoined(); }
-                _room.players[_playerIndex] = _room.players[_room.players.length-1];
-                _room.players.pop();
-                _room.offchainPublicKeys[_playerIndex] = _room.offchainPublicKeys[_room.players.length-1];
-                _room.offchainPublicKeys.pop();
+                removeFromUnorderedAddressArray(_room.players, _playerIndex);
+                removeFromUnorderedAddressArray(_room.offchainPublicKeys, _playerIndex);
                 _room.indices.pop();
                 emit GameRoomPlayerLeft(id, msg.sender);
             }
@@ -354,14 +352,14 @@ contract SolidityElevatorCTF {
     //TODO: Add function to load a state from signed data
     
     function play(uint256 gameRoomId, uint16 turnsToPlay) external {
+        require(turnsToPlay > 0);
 
         GameRoom memory _room = gameRooms[gameRoomId];
         ElevatorData[] memory _elevatorsData = elevatorsData[gameRoomId];
-        FloorPassengerData[] storage _floorPassengersData = floorPassengersData[gameRoomId];
         
         if (_room.status > GameRoomStatus.Ready) { revert GameRoomPlayOnFinished(gameRoomId); }
 
-        FloorButtons[] memory _floorButtons = calculateFloorButtons(_room.turn, _floorPassengersData);
+        FloorButtons[] memory _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
         uint8[] memory _topScoreElevators = calculateTopScoreElevators(_elevatorsData);
 
         unchecked {
@@ -385,7 +383,7 @@ contract SolidityElevatorCTF {
                 
                 // If a passenger needs to be added, push it into storage and update elevator lights
                 if (_createNewPassenger) {
-                    _floorPassengersData[_startFloor].passengers.push(_targetFloor);
+                    floorPassengersData[gameRoomId][_startFloor].passengers.push(_targetFloor);
                     if (_floorButtons[_startFloor] == FloorButtons.Off) {
                         _floorButtons[_startFloor] = (_startFloor < _targetFloor)?FloorButtons.Up:FloorButtons.Down;
                     } else if ((_floorButtons[_startFloor] != FloorButtons.Both) &&
@@ -399,7 +397,6 @@ contract SolidityElevatorCTF {
                 // Next, calculate the other elevator info to send to the smart contract call
                 // ElevatorInfo includes full elevator data for the current elevator, and partial data for the other ones.
                 ElevatorInfo[] memory _elevatorInfo = buildElevatorsInfo(_elevatorsData, _currentElevatorId);
-
 
                 //////////////////////////////////////////////////////
                 //                 ELEVATOR CONTROL                 //
@@ -486,45 +483,83 @@ contract SolidityElevatorCTF {
                 //In the process, check if the elevator has won (by achieving target score)
                 bool _won;
 
-                //Elevator is Idle while doors are open, no floorTarget is set and no passenger is available to go in or out of the elevator
-                if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle) {
+                //'Idle' and 'Waiting' internally execute almost the same code, but can have different meanings
+                //  'Idle' is where the elevator starts: doors open, waiting for a commnad. Passengers can get in, but status
+                //  won't change to 'Closing' unitil a target flor is given with the floor queue.
+                //  'Waiting' is the immediate status set after an elevator reaches a target floor and opens it's doors.
+                //  In this status, doors are open and passengers first get out, then get in. After all passengers have moved,
+                //  it should switch to 'Idle' if there's no next floor in queue or to 'Closing' if there is.
+                if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Idle ||
+                    _elevatorsData[_currentElevatorId].status == ElevatorStatus.Waiting) {
 
                     uint8 _currentFloor = currentFloor(_elevatorsData[_currentElevatorId]);
 
-                    //First check if passangers are available to get into the elevator
-                    (bool _passengersToGetIn, uint8 _targetPassengerIndex) = findNextPassangerForElevator(
-                        _elevatorsData[_currentElevatorId],
-                        _currentFloor,
-                        _floorPassengersData[_currentFloor].passengers,
-                        MAX_PASSENGERS_PER_ELEVATOR
-                    );
+                    //First check if there are passengers to get out of the elevator
+                    (bool _passengersToGoOut, uint8 _targetOutgoingPassengerIndex) = findNextPassangerToGetOut(_elevatorsData[_currentElevatorId]);
 
-                    //If there's a passanger available to get in:
-                    // 1) Push it into the elevator
-                    // 2) Pop it from the floor
-                    // 3) Change status to 'Waiting'
-                    if (_passengersToGetIn) {
-                        elevatorsData[gameRoomId][_currentElevatorId].passengers.push(_floorPassengersData[_currentFloor].passengers[_targetPassengerIndex]);
-                        _floorPassengersData[_currentFloor].passengers[_targetPassengerIndex] = _floorPassengersData[_currentFloor].passengers[_floorPassengersData[_currentFloor].passengers.length - 1];
-                        _floorPassengersData[_currentFloor].passengers.pop();
-                        _elevatorsData[_currentElevatorId].status = ElevatorStatus.Waiting;
+                    if (_passengersToGoOut) {
+                        //If a passanger got out:
+                        // 1) Pop it from the elevator (storage) and update memory
+                        removeFromUnorderedArray(elevatorsData[gameRoomId][_currentElevatorId].passengers, _targetOutgoingPassengerIndex);
+                        _elevatorsData[_currentElevatorId].passengers = elevatorsData[gameRoomId][_currentElevatorId].passengers;
 
-                        //TODO: Recalculate floor light
+                        // 2) Add 1 to the elevator's score and check if score makes current elevator the winner
+                        _elevatorsData[_currentElevatorId].score++;
+                        if (_elevatorsData[_currentElevatorId].score == _room.scoreToWin) {
+                            _won = true;
+                        }
 
+                        // 3) Update _topScoreElevators
+                        _topScoreElevators = calculateTopScoreElevators(_elevatorsData);
                     } else {
-                        //If there's no passenger, check if there's a floor in the queue.
-                        //If so, loop through the queue to find the next targetFloor, then:
-                        // 1) Set the elevator's target floor
-                        // 2) Shift the floor queue (in storage)
-                        // 3) Update the memory queue
-                        // 4) Change the status to 'Closing'
-                            
-                        for (uint8 i=0; i<_elevatorsData[_currentElevatorId].floorQueue.length; i++) {
-                            _elevatorsData[_currentElevatorId].targetFloor = _elevatorsData[_currentElevatorId].floorQueue[0];
-                            shiftArray(elevatorsData[gameRoomId][_currentElevatorId].floorQueue);
+
+                        //If all passengers who needed to get out got out,
+                        //check if passangers are available to get into the elevator
+                        (bool _passengersToGetIn, uint8 _targetPassengerIndex) = findNextPassangerForElevator(
+                            _elevatorsData[_currentElevatorId],
+                            _currentFloor,
+                            floorPassengersData[gameRoomId][_currentFloor].passengers,
+                            MAX_PASSENGERS_PER_ELEVATOR
+                        );
+
+                        if (_passengersToGetIn) {
+                            //If there's a passanger available to get in:
+                            // 1) Push it into the elevator (storage) and Pop it from the floor (storage)
+                            elevatorsData[gameRoomId][_currentElevatorId].passengers.push(
+                                floorPassengersData[gameRoomId][_currentFloor].passengers[_targetPassengerIndex]);
+                            removeFromUnorderedArray(floorPassengersData[gameRoomId][_currentFloor].passengers, _targetPassengerIndex);
+
+                            // 2) Update passengers in memory
+                            _elevatorsData[_currentElevatorId].passengers = elevatorsData[gameRoomId][_currentElevatorId].passengers;
+
+                            // 3) Recalculate Floor Buttons
+                            _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
+                        } else {
+
+                            //If there's no passenger to get in, check if there's a floor in the queue (!= from current floor)
+
+                            bool _hasChangedTargetFloor;
+
+                            for (uint8 i=0; i<_elevatorsData[_currentElevatorId].floorQueue.length; i++) {
+                                // 1) Set the elevator's target floor
+                                _elevatorsData[_currentElevatorId].targetFloor = _elevatorsData[_currentElevatorId].floorQueue[0];
+
+                                // 2) Shift the floor queue (in storage)
+                                shiftArray(elevatorsData[gameRoomId][_currentElevatorId].floorQueue);
+
+                                // 3) Make sure target floor is different from current floor before breaking the loop
+                                if (_elevatorsData[_currentElevatorId].targetFloor != _currentFloor) {
+                                    _hasChangedTargetFloor = true;
+                                    break;
+                                }
+                            }
+
+                            // 4) Now update the memory queue:
                             _elevatorsData[_currentElevatorId].floorQueue = elevatorsData[gameRoomId][_currentElevatorId].floorQueue;
-                            _elevatorsData[_currentElevatorId].status = ElevatorStatus.Closing;
-                            if (_elevatorsData[_currentElevatorId].targetFloor != _currentFloor) { break; }
+                            
+                            // 5) If a new valid target floor was set change status to 'Closing', if not, to 'Idle'
+                            _elevatorsData[_currentElevatorId].status = _hasChangedTargetFloor?ElevatorStatus.Closing:ElevatorStatus.Idle;
+
                         }
                     }
                 } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.GoingUp) {
@@ -566,42 +601,8 @@ contract SolidityElevatorCTF {
                     } else if (_currentFloor > _elevatorsData[_currentElevatorId].targetFloor) {
                         _elevatorsData[_currentElevatorId].status = ElevatorStatus.GoingDown;
                     } else {
+                        //This should never happen
                         _elevatorsData[_currentElevatorId].status = ElevatorStatus.Opening;
-                    }
-
-                } else if (_elevatorsData[_currentElevatorId].status == ElevatorStatus.Waiting) {
-
-                    uint8 _currentFloor = currentFloor(_elevatorsData[_currentElevatorId]);
-
-                    //First check if passangers are available to get into the elevator
-                    (bool _passengersToGetIn, uint8 _targetIncomingPassengerIndex) = findNextPassangerForElevator(
-                        _elevatorsData[_currentElevatorId],
-                        _currentFloor,
-                        _floorPassengersData[_currentFloor].passengers,
-                        MAX_PASSENGERS_PER_ELEVATOR
-                    );
-
-                    if (_passengersToGetIn) {
-
-                        elevatorsData[gameRoomId][_currentElevatorId].passengers.push(_floorPassengersData[_currentFloor].passengers[_targetIncomingPassengerIndex]);
-                        _floorPassengersData[_currentFloor].passengers[_targetIncomingPassengerIndex] = _floorPassengersData[_currentFloor].passengers[_floorPassengersData[_currentFloor].passengers.length - 1];
-                        _floorPassengersData[_currentFloor].passengers.pop();
-
-                        //TODO: Recalculate floor light
-
-                    } else {
-
-                        (bool _passengersToGoOut, uint8 _targetOutgoingPassengerIndex) = findNextPassangerToGetOut(_elevatorsData[_currentElevatorId]);
-
-                        if (_passengersToGoOut) {
-
-                            //TODO: Pop from elevator
-                            
-                            //TODO: WAdd to the score, check for win and update _topScoreElevators
-
-                        } else {
-                            //TODO: Continue to Closing or to Idle depending on queue
-                        }
                     }
                 }
 
@@ -642,6 +643,17 @@ contract SolidityElevatorCTF {
             gameRooms[gameRoomId].waitingPassengers = _room.waitingPassengers;
             gameRooms[gameRoomId].randomSeed = _room.randomSeed;
             gameRooms[gameRoomId].actionsSold = _room.actionsSold;
+
+            for (uint8 i=0; i<_elevatorsData.length; i++) {
+                elevatorsData[gameRoomId][i].status = _elevatorsData[i].status;
+                elevatorsData[gameRoomId][i].light = _elevatorsData[i].light;
+                elevatorsData[gameRoomId][i].score = _elevatorsData[i].score;
+                elevatorsData[gameRoomId][i].targetFloor = _elevatorsData[i].targetFloor;
+                elevatorsData[gameRoomId][i].balance = _elevatorsData[i].balance;
+                elevatorsData[gameRoomId][i].speed = _elevatorsData[i].speed;
+                elevatorsData[gameRoomId][i].y = _elevatorsData[i].y;
+                elevatorsData[gameRoomId][i].data = _elevatorsData[i].data;
+            }
         }
     }
     
@@ -803,6 +815,16 @@ contract SolidityElevatorCTF {
         for (uint256 i=1; i<arr.length; i++) {
             arr[i-1] = arr[i];
         }
+        arr.pop();
+    }
+
+    function removeFromUnorderedAddressArray(address[] storage arr, uint256 idx) private {
+        arr[idx] = arr[arr.length - 1];
+        arr.pop();
+    }
+
+    function removeFromUnorderedArray(uint8[] storage arr, uint256 idx) private {
+        arr[idx] = arr[arr.length - 1];
         arr.pop();
     }
 
