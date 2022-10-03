@@ -20,7 +20,7 @@ describe("Gameplay", function () {
     return { SECTF, owner, player1, player2, player3, player4 };
   }
 
-  describe("Game Room Managment", function () {
+  describe("Play complete games", function () {
 
     it("Should play a complete game", async function () {
         const { SECTF, owner, player1, player2, player3, player4 } = await loadFixture(initialize);
