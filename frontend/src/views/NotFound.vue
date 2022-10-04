@@ -3,7 +3,7 @@
 </script>
 
 <template>
-  <div id="tuc">
-    TUC
+  <div id="not_found">
+    NOT FOUND
   </div>
 </template>
