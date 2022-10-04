@@ -42,7 +42,7 @@ contract SolidityElevatorCTF {
     uint32 private constant MAX_ROOM_TIME = 1 hours;
 
     uint16 private constant SOFT_TURN_DEADLINE = 1000;
-    uint16 private constant HARD_TURN_DEADLINE = (SOFT_TURN_DEADLINE * 11) / 10;
+    uint16 private constant HARD_TURN_DEADLINE = 1200;
 
     uint8 private constant NEW_PASSENGERS_SPAWN_RATE = 5;   //MORE IS LESS
     uint8 private constant MAX_PASSENGERS_PER_ELEVATOR = 4;
@@ -54,7 +54,7 @@ contract SolidityElevatorCTF {
     uint16 private constant ELEVATOR_INITIAL_POSITION = 0;
     uint32 private constant ELEVATOR_INITIAL_BALANCE = 15000;
 
-    uint32 private constant MAX_GAS_FOR_ON_CHAIN_TURN = 2_000_000;
+    uint32 private constant MAX_GAS_FOR_ON_CHAIN_TURN = 6_000_000;
     
     /*//////////////////////////////////////////////////////////////
                       ACTIONS & PRICING CONSTANTS
@@ -73,10 +73,10 @@ contract SolidityElevatorCTF {
     mapping (ActionType => ActionSettings) internal actionSettings;
 
     constructor() {
-        actionSettings[ActionType.SPEED_UP] = ActionSettings(100e18, 0.01e18, 0.5e18);
-        actionSettings[ActionType.SLOW_DOWN] = ActionSettings(100e18, 0.01e18, 0.5e18);
+        actionSettings[ActionType.SPEED_UP] = ActionSettings(10e18, 0.33e18, 2e18);
+        actionSettings[ActionType.SLOW_DOWN] = ActionSettings(10e18, 0.33e18, 0.2e18);
     }
-    
+
     /*//////////////////////////////////////////////////////////////
                   ELEVATOR GAME STRUCTS AND STORAGE
     //////////////////////////////////////////////////////////////*/
@@ -177,6 +177,7 @@ contract SolidityElevatorCTF {
     mapping(uint256 => FloorPassengerData[]) private floorPassengersData;
 
     error NotJoined();
+    error ElevatorCall();
     error WrongSettings();
     error WrongElevatorInterface();
     error GameRoomUnavailable(uint256 id);
@@ -191,12 +192,34 @@ contract SolidityElevatorCTF {
     function getGameRoom(uint256 id) external view returns (GameRoom memory) {
         GameRoom memory _room = gameRooms[id];
         if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
+
+        preventElevatorCall(elevatorsData[id], msg.sender);
+
         if (_room.status == GameRoomStatus.Created || _room.status != GameRoomStatus.Ready) {
             if (block.timestamp > _room.deadline) {
                 _room.status = GameRoomStatus.Timeout;
             }
         }
         return _room;
+    }
+
+    function getElevatorData(uint256 id) external view returns (ElevatorData[] memory) {
+        GameRoom memory _room = gameRooms[id];
+        if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
+
+        ElevatorData[] memory _elevatorsData = elevatorsData[id];
+        preventElevatorCall(_elevatorsData, msg.sender);
+        return _elevatorsData;
+    }
+
+    function getFloorPassengersData(uint256 id) external view returns (FloorPassengerData[] memory) {
+        GameRoom memory _room = gameRooms[id];
+        if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
+
+        preventElevatorCall(elevatorsData[id], msg.sender);
+
+        FloorPassengerData[] memory _floorPassengersData = floorPassengersData[id];
+        return _floorPassengersData;
     }
 
     function createGameRoom(uint8 numberOfPlayers, uint8 floors, uint8 scoreToWin, Elevator elevator, address offchainPublicKey) external {
@@ -442,16 +465,25 @@ contract SolidityElevatorCTF {
                                 } else {
                                     _elevatorsData[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
                                 }
-                            } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed > 0)) {
+
+                                console.log("SPEED_UP on Turn", _room.turn, "- elevator", _currentElevatorId);
+                                console.log(" --> Increased speed to", _elevatorsData[_currentElevatorId].speed, "and is left with a balance of", _elevatorsData[_currentElevatorId].balance);
+
+                            } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed >= 2)) {
 
                                 _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
                                 _room.actionsSold[uint256(ActionType.SLOW_DOWN)] += _update.amount;
 
-                                if (_update.amount >= _elevatorsData[_currentElevatorId].speed) {
-                                    _elevatorsData[_currentElevatorId].speed = 0;
-                                } else {
-                                    _elevatorsData[_update.target].speed -= uint8(_update.amount);
+                                _elevatorsData[_update.target].speed = uint8(uint256(_elevatorsData[_update.target].speed) / (2 ** _update.amount));
+
+                                if (_elevatorsData[_update.target].speed == 0) {
+                                    _elevatorsData[_update.target].speed = 1;
                                 }
+
+                                console.log("SLOW_DOWN on Turn", _room.turn, "- elevator", _currentElevatorId);
+                                console.log(" --> Decreased speed of elevator", _update.target, "to", _elevatorsData[_update.target].speed);
+                                //console.log("Left with", _elevatorsData[_currentElevatorId].balance);
+
                             }
                         }
                     }
@@ -639,6 +671,7 @@ contract SolidityElevatorCTF {
                     _room.turn++;
                     //if HARD_TURN_DEADLINE is reached, the game is probably on an infinite loop. Finish it without a winner
                     if (_room.turn > HARD_TURN_DEADLINE) {
+                        console.log("HARD DEADLINE!");
                         _room.status = GameRoomStatus.FinishedWithoutWinner;
                         break;
                     }
@@ -703,6 +736,14 @@ contract SolidityElevatorCTF {
     /*//////////////////////////////////////////////////////////////
                                 HELPERS
     //////////////////////////////////////////////////////////////*/
+
+    function preventElevatorCall(ElevatorData[] memory elevators, address sender) private pure {
+        for (uint256 i=0; i<elevators.length; i++) {
+            if (address(elevators[i].elevator) == sender) {
+                revert ElevatorCall();
+            }
+        }
+    }
 
     function shuffledIndices(uint64 random, uint8 totalPlayers) private pure returns (uint8[] memory) {
         require (totalPlayers > 0);

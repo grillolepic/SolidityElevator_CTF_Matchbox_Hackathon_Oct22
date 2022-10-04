@@ -29,6 +29,8 @@ import "./Elevator.sol";
 //      uint8 target;               Target id of player to target for SLOW_DOWN action
 //      bytes32 data;               Arbitrary data to be used internally
 
+// To calculate the price of 10 SPEED_UP Actions:
+// SE.getActionCost(turn, actionsSold[uint256(SolidityElevatorCTF.ActionType.SPEED_UP)], SolidityElevatorCTF.ActionType.SPEED_UP, 10); 
 
 contract ExampleElevator is Elevator {
 
@@ -47,12 +49,12 @@ contract ExampleElevator is Elevator {
     ) override public view returns(SolidityElevatorCTF.ElevatorUpdate memory) {
 
         uint256 _speedUpCost = SE.getActionCost(turn, actionsSold[uint256(SolidityElevatorCTF.ActionType.SPEED_UP)], SolidityElevatorCTF.ActionType.SPEED_UP, 10);
-        uint256 _slowDownCost = SE.getActionCost(turn, actionsSold[uint256(SolidityElevatorCTF.ActionType.SLOW_DOWN)], SolidityElevatorCTF.ActionType.SLOW_DOWN, 5);
+        uint256 _slowDownCost = SE.getActionCost(turn, actionsSold[uint256(SolidityElevatorCTF.ActionType.SLOW_DOWN)], SolidityElevatorCTF.ActionType.SLOW_DOWN, 1);
 
         SolidityElevatorCTF.ActionType _actionType = SolidityElevatorCTF.ActionType.SPEED_UP;
         uint256 _amount;
         uint8 _target;
-
+       
         if (elevInfo[myId].balance >= 50) {
 
             if (elevInfo[myId].speed < 100 && _speedUpCost <= 50) {
@@ -63,11 +65,11 @@ contract ExampleElevator is Elevator {
                 if (!_winning) {
 
                     _actionType = SolidityElevatorCTF.ActionType.SLOW_DOWN;
-                    _amount = 5;
+                    _amount = 1;
 
                     for (uint256 i=0; i<topScoreElevators.length; i++) {
                         if (topScoreElevators[i] != myId) {
-                            _target = uint8(i);
+                            _target = uint8(topScoreElevators[i]);
                             break;
                         }
                     }

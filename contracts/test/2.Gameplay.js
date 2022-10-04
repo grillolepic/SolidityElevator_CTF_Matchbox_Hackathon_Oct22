@@ -29,7 +29,7 @@ describe("Gameplay", function () {
     
         let randomWallet = ethers.Wallet.createRandom();
         const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
-        await SECTF.connect(player1).createGameRoom(2, 8, 50, ELEVATOR_1.address, randomWallet.address);
+        await SECTF.connect(player1).createGameRoom(2, 8, 10, ELEVATOR_1.address, randomWallet.address);
         
         randomWallet = ethers.Wallet.createRandom();
         const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
@@ -38,14 +38,14 @@ describe("Gameplay", function () {
         let gameRoom = await SECTF.getGameRoom(0);
         console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
   
-        while (true) {        
+        while (true) {
           try {
             let receipt = await SECTF.play(0, 50);
             await receipt.wait();
           } catch(err) {}
 
           gameRoom = await SECTF.getGameRoom(0);
-          console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
+          console.log(`GameRoom's turn is now: ${gameRoom.turn} and status is ${gameRoom.status}`);
           
           if (gameRoom.status != 2) { break; }
         }
