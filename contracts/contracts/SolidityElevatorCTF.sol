@@ -34,13 +34,17 @@ contract SolidityElevatorCTF {
                         MISCELLANEOUS CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
+    uint256 public constant VERSION = 1;
+
+    uint8 private constant MAX_ROOMS_PER_PLAYER = 10;
+
     uint8 private constant MAX_PLAYERS = 4;
     uint8 private constant MIN_FLOORS = 4;
     uint8 private constant MAX_FLOORS = 8;
     uint8 private constant MIN_SCORE_TO_WIN = 1;
-    uint8 private constant MAX_SCORE_TO_WIN = 100;
+    uint8 private constant MAX_SCORE_TO_WIN = 100;    
     uint32 private constant MAX_ROOM_TIME = 1 hours;
-
+    
     uint16 private constant SOFT_TURN_DEADLINE = 1000;
     uint16 private constant HARD_TURN_DEADLINE = 1200;
 
@@ -176,9 +180,13 @@ contract SolidityElevatorCTF {
     mapping(uint256 => ElevatorData[]) private elevatorsData;
     mapping(uint256 => FloorPassengerData[]) private floorPassengersData;
 
+    mapping(address => uint8) private playerActiveGameRooms;
+    mapping(address => uint256[]) private playerGameRoomIds;
+
     error NotJoined();
     error ElevatorCall();
     error WrongSettings();
+    error TooManyGameRooms();
     error WrongElevatorInterface();
     error GameRoomUnavailable(uint256 id);
     error GameRoomPlayerAlreadyJoined(uint256 id, address player);
@@ -220,6 +228,14 @@ contract SolidityElevatorCTF {
 
         FloorPassengerData[] memory _floorPassengersData = floorPassengersData[id];
         return _floorPassengersData;
+    }
+
+    function getPlayerActiveRooms() external view returns (GameRoom[] memory) {
+        GameRoom[] memory _rooms = new GameRoom[](playerActiveGameRooms[msg.sender]);
+        for (uint256 i=0; i<playerGameRoomIds[msg.sender].length; i++) {
+            _rooms[i] = gameRooms[playerGameRoomIds[msg.sender][i]];
+        }
+        return _rooms;
     }
 
     function createGameRoom(uint8 numberOfPlayers, uint8 floors, uint8 scoreToWin, Elevator elevator, address offchainPublicKey) external {
@@ -280,6 +296,8 @@ contract SolidityElevatorCTF {
             gameRooms[totalGameRooms] = _room;
         }
 
+        addToActiveGameRooms(totalGameRooms);
+
         emit GameRoomCreated(totalGameRooms, msg.sender);
         totalGameRooms++;
     }
@@ -291,16 +309,22 @@ contract SolidityElevatorCTF {
             if (block.timestamp > _room.deadline) {
                 _room.status = GameRoomStatus.Timeout;
                 emit GameRoomTimeout(id);
+                removeFromActiveGameRooms(id);
             }
         } else if (_room.status == GameRoomStatus.Created) {
+            
             if (block.timestamp > _room.deadline) {
                 _room.status = GameRoomStatus.Timeout;
                 emit GameRoomTimeout(id);
+                removeFromActiveGameRooms(id);
                 return;
             }
+
             if (_room.players[0] == msg.sender) { 
                 _room.status = GameRoomStatus.Cancelled;
                 emit GameRoomCancelled(id);
+                removeFromActiveGameRooms(id);
+
             } else {
                 uint8 _playerIndex;
                 for (uint8 i=1; i<_room.players.length; i++) {
@@ -313,6 +337,7 @@ contract SolidityElevatorCTF {
                 removeFromUnorderedAddressArray(_room.offchainPublicKeys, _playerIndex);
                 _room.indices.pop();
                 emit GameRoomPlayerLeft(id, msg.sender);
+                removeFromActiveGameRooms(id);
             }
         } else {
             revert GameRoomUnavailable(id);
@@ -320,7 +345,6 @@ contract SolidityElevatorCTF {
     }
 
     function joinGameRoom(uint256 id, Elevator elevator, address offchainPublicKey) external {
-
         GameRoom storage _room = gameRooms[id];
         if (_room.status != GameRoomStatus.Created) { revert GameRoomUnavailable(id); }
         if (!elevator.supportsInterface(type(IElevator).interfaceId)) { revert WrongElevatorInterface(); }
@@ -365,6 +389,8 @@ contract SolidityElevatorCTF {
             _room.status = GameRoomStatus.Ready;
             emit GameRoomReady(id);
         }
+
+        addToActiveGameRooms(id);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -384,6 +410,7 @@ contract SolidityElevatorCTF {
         if (block.timestamp > _room.deadline) {
             _room.status = GameRoomStatus.Timeout;
             emit GameRoomTimeout(gameRoomId);
+            removeFromActiveGameRooms(gameRoomId);
             return;
         }
 
@@ -928,5 +955,31 @@ contract SolidityElevatorCTF {
         }
 
         return (_foundPassenger, _passangerIndex);
+    }
+
+    function addToActiveGameRooms(uint256 id) private {
+        if (playerActiveGameRooms[msg.sender] >= MAX_ROOMS_PER_PLAYER) {
+            revert TooManyGameRooms();
+        }
+
+        if (playerActiveGameRooms[msg.sender] == 0) {
+            uint256[] memory _playerGameRoomId = new uint256[](1);
+            _playerGameRoomId[0] = id;
+            playerGameRoomIds[msg.sender] = _playerGameRoomId;
+        } else {
+            playerGameRoomIds[msg.sender].push(id);
+        }
+        playerActiveGameRooms[msg.sender]++;
+    }
+
+    function removeFromActiveGameRooms(uint256 id) private {
+        for (uint256 i=0; i<playerGameRoomIds[msg.sender].length; i++) {
+            if (playerGameRoomIds[msg.sender][i] == id) {
+                playerGameRoomIds[msg.sender][i] = playerGameRoomIds[msg.sender][playerGameRoomIds[msg.sender].length - 1];
+                playerGameRoomIds[msg.sender].pop();
+                break;
+            }
+        }
+        playerActiveGameRooms[msg.sender]--;
     }
 }
