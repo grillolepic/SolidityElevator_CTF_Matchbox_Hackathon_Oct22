@@ -166,7 +166,6 @@ describe("GameRooms", function () {
       await SECTF.connect(player1).createGameRoom(3, 8, 100, ELEVATOR_1.address, randomWallet.address);
 
       await network.provider.send("evm_increaseTime", [100000000])
-
       await SECTF.connect(player1).exitGameRoom(0);
       let gameRoom = await SECTF.getGameRoom(0);
 
@@ -197,10 +196,7 @@ describe("GameRooms", function () {
       let randomWallet = ethers.Wallet.createRandom();
       const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
       await SECTF.connect(player1).createGameRoom(1, 8, 100, ELEVATOR_1.address, randomWallet.address);
-      await SECTF.connect(player1).exitGameRoom(0);
-
       let gameRoom = await SECTF.getGameRoom(0);
-
       expect(gameRoom.status).to.equal(2);
     });
 

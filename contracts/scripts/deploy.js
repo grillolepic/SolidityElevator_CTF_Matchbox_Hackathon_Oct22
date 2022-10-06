@@ -7,7 +7,7 @@ async function main() {
 
   const solidityElevatorCtfFactory = await ethers.getContractFactory("SolidityElevatorCTF", {
     libraries: {
-      DRNG: "0x62A59B08dEbb165D57969F430DA9542ffF45A5b1"  //DRNG.address
+      DRNG: "0x6957275a73A1Fa49a952e3a636B7F461C2464d3E"  //DRNG.address
     }
   });
   const SECTF = await solidityElevatorCtfFactory.deploy();
@@ -21,8 +21,8 @@ main().catch((error) => {
 
 //Last deploy (Arbitrum Goerli Testnet):
 //  DRNG deployed to 0x6957275a73A1Fa49a952e3a636B7F461C2464d3E
-//  SECTF deployed to 0xa268C4eC29bA20D5b7Ffc14F1dD59FDFAEED8225
+//  SECTF deployed to 0x0af8d5B17B50723A45281DeE5d62e4408c486CF8
 
 //Last deploy (Arbitrum Nova):
 //  DRNG deployed to 0x62A59B08dEbb165D57969F430DA9542ffF45A5b1
-//  SECTF deployed to 0x2f6C415b10ca281D8fD9e2f18C7835A954168e55
+//  SECTF deployed to 0x680A96ed10fb967703c2b00DBfba85d438a2ac2A
