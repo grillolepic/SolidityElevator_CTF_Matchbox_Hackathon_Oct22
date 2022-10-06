@@ -27,7 +27,13 @@ let _resetState = {
     currentRoomJoined: null,
     currentRoomLostKeys: null,
     currentRoomStatus: null,
-    currentRoom: null  
+    currentRoom: null,
+
+    gameInternalStatus: null,
+    gameLastCheckpoint: null,
+    gamePeers: {},
+    gameBlockchainInteraction: false,
+
 };
 
 let _initialState = {
@@ -37,6 +43,7 @@ let _initialState = {
     ... _resetState
 };
 
+let _offchainSigner = null;
 let _trysteroRoom = null;
 let _sendMessage = null;
 let _getMessage = null;
@@ -64,7 +71,7 @@ export const useSECTFStore = defineStore({
             let _version = (await _solidityElevatorCTFContract.VERSION()).toNumber() / 100;
             this.version = _version.toString();
 
-            await this.loadPreviousRooms();
+            await this.loadActiveRooms();
         },
 
         reset() {
@@ -73,8 +80,8 @@ export const useSECTFStore = defineStore({
             this.$patch({ ..._resetState });
         },
 
-        async loadPreviousRooms() {
-            console.log("SECTF: loadPreviousRooms()");
+        async loadActiveRooms() {
+            console.log("SECTF: loadActiveRooms()");
             this.loadingPreviousRooms = true;
 
             let gameRooms = [];
@@ -126,12 +133,12 @@ export const useSECTFStore = defineStore({
                 );
                 await txReceipt.wait();
 
-                await this.loadPreviousRooms();
+                await this.loadActiveRooms();
 
                 let lastRoomId = -1;
                 for (let i=0; i<this.activeGameRooms.length; i++) {
                     if (parseInt(this.activeGameRooms[i].id) > lastRoomId) {
-                        lastRoomId = this.activeGameRooms[i].id;
+                        lastRoomId = parseInt(this.activeGameRooms[i].id);
                     }
                 }
                 if (lastRoomId < 0) {
@@ -140,14 +147,14 @@ export const useSECTFStore = defineStore({
                 }
 
                 localStorage.removeItem(`${this.localKeySimple}_tmp`);
-                localStorage.setItem(`${this.localKeyCustomGameRoom(lastRoomId)}`, JSON.stringify({
+                localStorage.setItem(`${this.localKeyCustomGameRoom(lastRoomId.toString())}`, JSON.stringify({
                     offcain_private_key: randomWallet.privateKey,
                     offcain_public_key: randomWallet.publicKey,
                     offcain_address: randomWallet.address
                 }));
 
                 this.creatingRoom = false;
-                return true;
+                return lastRoomId;
 
             } catch (err) {
                 this.creatingRoom = false;
@@ -177,7 +184,7 @@ export const useSECTFStore = defineStore({
                     let playerNumber = room.players.indexOf(_ethereumStore.address);
                     let playerJoined = (playerNumber >= 0);
 
-                    const localData = this.getLocalStorage(id);
+                    let localData = this.getLocalStorage(id);
                     let privateKeyLost = playerJoined && ((localData == null) || !("offcain_private_key" in localData));
 
                     if (privateKeyLost) {
@@ -193,6 +200,11 @@ export const useSECTFStore = defineStore({
                                 }
                             }
                         }
+                    }
+                    
+                    localData = this.getLocalStorage(id);
+                    if (!privateKeyLost) {
+                        _offchainSigner = new Wallet(localData.offcain_private_key);
                     }
 
                     this.$patch({
@@ -215,7 +227,7 @@ export const useSECTFStore = defineStore({
                     });
                 }
             } catch (err) {
-                await this.loadPreviousRooms();
+                await this.loadActiveRooms();
                 this.$patch({
                     loadingRoom: false,
                     currentRoomId: null,
@@ -234,7 +246,7 @@ export const useSECTFStore = defineStore({
             try {
                 let txReceipt = await _solidityElevatorCTFContract.exitGameRoom(id);
                 await txReceipt.wait();
-                await this.loadPreviousRooms();
+                await this.loadActiveRooms();
                 this.closingRoom = false;
                 return true;
             } catch (err) {
@@ -248,26 +260,257 @@ export const useSECTFStore = defineStore({
             this.joiningRoom = true;
 
             let randomWallet = Wallet.createRandom();
-            console.log(randomWallet);
+            localStorage.setItem(`${this.localKeySimple}_tmp`, JSON.stringify({
+                offcain_private_key: randomWallet.privateKey,
+                offcain_public_key: randomWallet.publicKey,
+                offcain_address: randomWallet.address
+            }));
 
             try {
-                let txReceipt = await _solidityElevatorCTFContract.createGameRoom(
-                    numberOfPlayers,
-                    floors,
-                    scoreToWin,
+                let txReceipt = await _solidityElevatorCTFContract.joinGameRoom(
+                    id,
                     elevatorAddress,
                     randomWallet.address
                 );
                 await txReceipt.wait();
+
+                await this.loadActiveRooms();
+
+                localStorage.removeItem(`${this.localKeySimple}_tmp`);
+                localStorage.setItem(`${this.localKeyCustomGameRoom(id)}`, JSON.stringify({
+                    offcain_private_key: randomWallet.privateKey,
+                    offcain_public_key: randomWallet.publicKey,
+                    offcain_address: randomWallet.address
+                }));
+
+                await this.loadRoom(id);
+
+                this.joiningRoom = false;
+                return true;
+
             } catch (err) {
-                this.creatingRoom = false;
+                await this.loadActiveRooms();
+                this.joiningRoom = false;
                 return false;
             }
-            
-            await this.loadPreviousRooms();
+        },
 
-            this.creatingRoom = false;
-            return true;
+        startGame() {
+            console.log("SECTF: startGame()");
+            if (this.currentRoomId == null || this.currentRoomStatus != 2) { return this.gameInternalStatus = -1; }
+            
+            this.gameInternalStatus = 0;
+            
+            //01. Load the stored data. If private key data is not found, exit.
+            let storedCheckpoint = null;
+
+            let storedGameData = this.getLocalStorage();
+
+            if (storedGameData != null) {
+                if (!("offcain_private_key" in storedGameData)) { return this.currentRoomLostKeys = true; }
+                try { if ("checkpoint" in storedGameData) { storedCheckpoint = {...storedGameData.checkpoint}; } } catch (err) { storedCheckpoint = null; }
+            } else {
+                return this.currentRoomLostKeys = true;
+            }
+            
+            //02. TODO: If a checkpoint was stored, validate it and load it. Delete if invalid.
+            if (storedCheckpoint != null) {
+                try {
+                    /*
+                    let checkpointData = JSON.parse(JSON.stringify(storedCheckpoint.data));
+
+                    let ownVerify = TuxitCrypto.verifySignature(checkpointData, storedCheckpoint.signatures[this.playerNumber], _keyPairs[this.playerNumber], storedCheckpoint.hash);
+                    if (!ownVerify.verified) { throw Error("Wrong checkpoint player signature"); }
+
+                    const otherPlayerNumber = (this.playerNumber == 0)?1:0;
+                    if (storedCheckpoint.signatures[otherPlayerNumber].length > 0) {
+                        let verify = TuxitCrypto.verifySignature(checkpointData, storedCheckpoint.signatures[otherPlayerNumber], _keyPairs[otherPlayerNumber]);
+                        if (!verify.verified) { throw Error("Wrong checkpoint opponent signature"); }
+                    } else {
+                        if (checkpointData[0] != 0n) {
+                            throw Error("Checkpoint >0 stored without double signatures");
+                        }
+                    }
+                    this.gameCheckpoint = storedCheckpoint;
+
+                    let _checkpoint = _gameStore.decodeCheckpoint(this.gameCheckpoint.data);
+                    this.gameCheckpoint.turn = _checkpoint.turn;
+
+                    console.log(" - Found valid checkpoint.");
+                    */
+                } catch (err) {
+                    console.log(" - Found invalid checkpoint. Deleted.");
+                    storedCheckpoint = null;
+                    delete storedGameData.checkpoint;
+                    localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
+                }
+            }
+
+            //03. TODO: Now check if th blockchain state is not further into the game (> turn)
+            /*
+            if (replaceCheckpoint) {
+                let signedCheckpoint = TuxitCrypto.sign(newGame.state, _keyPairs[this.playerNumber]);
+                storedGameData.checkpoint = {
+                    turn: 0,
+                    data: newGame.state,
+                    hash: signedCheckpoint.hashedData,
+                    signatures: [[],[]]
+                };
+                storedGameData.checkpoint.signatures[this.playerNumber] = signedCheckpoint.signature;
+
+                this.gameCheckpoint = storedGameData.checkpoint;
+                
+                storedGameData.actions = [];
+                
+                localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
+                console.log("       - Updated Checkpoint from blockchain state");
+            }
+            */
+
+            //04. Connect with other player via P2P and exchange signed ids before beginning sync
+            this.gameInternalStatus = 1;
+            
+            _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
+
+            [_sendMessage, _getMessage] = _trysteroRoom.makeAction('message');
+            _getMessage((data, peer) => this.getMessage(data, peer));
+
+            _trysteroRoom.onPeerJoin(async () => {
+                if (this.gameInternalStatus == 1) {
+                    let ts = Date.now();                    
+                    let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [_ethereumStore.address, ts]);
+                    console.log(hashedTimestampAddress, typeof hashedTimestampAddress);
+                    
+                    let signedTimestampAddress = await _offchainSigner.signMessage(utils.arrayify(hashedTimestampAddress));
+                    console.log(signedTimestampAddress, typeof signedTimestampAddress);
+
+                    _sendMessage({ type: "id", data: { address: _ethereumStore.address, timestamp: ts, signature: signedTimestampAddress }});
+                }
+            });
+
+            _trysteroRoom.onPeerLeave((peerId) => {
+                if (peerId in this.gamePeers) {
+                    console.log(` > Player #${this.gamePeers[peerId].playerNumber} (${this.gamePeers[peerId].address}) left the game`);
+                    let newPeers = {...this.gamePeers };
+                    delete newPeers[peerId];
+                    this.gamePeers = { ...newPeers };
+                    this.updatePlayers();
+                }
+            });
+        },
+
+        async getMessage(message, peerId) {
+            console.log("SECTF: getMessage()");
+
+            if (this.gameInternalStatus == 1 && message.type == "id") {
+                try {
+                    let timeDiff = Math.abs(Date.now() - message.data.timestamp);
+                    if (timeDiff < 10000) {
+                        let receivedAddress = utils.getAddress(message.data.address);
+                        let playerNumber = this.currentRoom.players.indexOf(receivedAddress);
+                        if (playerNumber >= 0) {
+                            let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [message.data.address, message.data.timestamp]);
+                            let signerAddress = utils.verifyMessage(utils.arrayify(hashedTimestampAddress), message.data.signature);
+                            if (signerAddress == this.currentRoom.offchainPublicKeys[playerNumber]) {
+                                this.gamePeers[peerId] = {
+                                    playerNumber: playerNumber,
+                                    address: receivedAddress
+                                }
+                                console.log(` > Player #${playerNumber} (${receivedAddress}) joined the game`);
+                                this.updatePlayers();
+                            } else { console.log(` > id rejected because provided signature could not be verified`); }
+                        } else { console.log(` > id rejected because address has not joined the room`); }
+                    } else { console.log(` > id rejected because timestamp is too old`); }
+                } catch(err) {
+                    console.log(err);
+                }
+
+            } else if (this.gameInternalStatus == 2 && message.type == "sync_checkpoint") {
+                /*
+                try {
+                    //01. First, validate the signature
+                    let receivedCheckpoint = JSON.parse(JSON.stringify(message.data.data));
+                    
+                    const otherPlayerNumber = (this.playerNumber == 0)?1:0;
+                    let verify = TuxitCrypto.verifySignature(receivedCheckpoint, message.data.signatures[otherPlayerNumber], _keyPairs[otherPlayerNumber]);
+                    if (!verify.verified) { throw Error("Wrong signature"); }
+
+                    //02. Then, make sure that the checkpoint is equal to the user's stored checkpoint
+                    if (verify.hashedData != this.gameCheckpoint.hash) {
+                        
+                        //03. If received checkpoint is different from the one stored, first decode the turn number
+                        let _checkpoint = _gameStore.decodeCheckpoint(receivedCheckpoint);
+
+                        //04. If the turn is equal to the local current state, verify, sign and save
+                        if (_checkpoint.turn == (_gameStore.turn - 1)) {
+
+                            let lastActionHash = this.gameActions[this.gameActions.length - 1].hash;
+                            let checkpoint = _gameStore.encodeCheckpoint(lastActionHash);
+                            let signedCheckpoint = TuxitCrypto.sign(checkpoint, _keyPairs[this.playerNumber]);
+
+                            if (signedCheckpoint.hashedData == message.data.hash) {
+                                message.data.signatures[this.playerNumber] = signedCheckpoint.signature;
+                                this.gameCheckpoint = JSON.parse(JSON.stringify(message.data));
+
+                                let storedGameData = this.getLocalStorage();
+                                storedGameData.checkpoint = this.gameCheckpoint;
+                                localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
+
+                                this.gameRequireCheckpoint = (_gameStore.turn - this.gameCheckpoint.turn > TURNS_FOR_CHECKPOINT);
+                            } else {
+                                //TODO: Consensus error!
+                                this.gameStatus = -1;
+                            }
+
+                        } else if (_checkpoint.turn >= (_gameStore.turn - 1)) {
+
+                            //TODO: If received checkpoint tun is greater than local current state:
+                            //      1) Verify, sign, save and update if it has 2 signatures
+                            //      2) Request a resync if it only has one
+
+                        } else {
+                            sendNewCheckpoint();
+                        }
+
+                    } else {
+                        //04. If hash is the same, make sure the opponent's signature is stored
+                        if (this.gameCheckpoint.signatures[otherPlayerNumber].length == 0 || 
+                            this.gameCheckpoint.signatures[otherPlayerNumber][0] != message.data.signatures[otherPlayerNumber][0] ||
+                            this.gameCheckpoint.signatures[otherPlayerNumber][1] != message.data.signatures[otherPlayerNumber][1]) {
+                                this.gameCheckpoint.signatures[otherPlayerNumber] = message.data.signatures[otherPlayerNumber];
+                                let storedGameData = this.getLocalStorage();
+                                storedGameData.checkpoint = this.gameCheckpoint;
+                                localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
+                    }}
+                    
+                    //04. Once last Checkpoint is synced, continue syncing action data
+                    if (this.gameStatus == 3) {
+                        this.gameStatus = 4;
+                        setTimeout(() => {
+                            if (this.gameCheckpoint == null) { return this.gameStatus == -3; }
+                            _sendMessage({type: "sync_actions", data: this.gameActions});
+                        }, 1000);
+                    }
+                } catch (err) {
+                    console.log(err);
+                    this.gameCheckpoint = null;
+                    this.gameStatus = -3;
+                }
+                */
+            }
+        },
+
+        async updatePlayers() {
+            console.log("SECTF: updatePlayers()");
+            if (Object.keys(this.gamePeers).length == (this.currentRoom.numberOfPlayers - 1)) {
+                this.gameInternalStatus = 2;
+                setTimeout(() => {
+                    if (this.gameLastCheckpoint == null) { return this.gameInternalStatus == -2; }
+                    _sendMessage({type: "sync_checkpoint", data: this.gameLastCheckpoint});
+                }, 1000);
+            } else {
+                this.gameInternalStatus = 1;
+            }
         },
 
         getLocalStorage(roomId = null) {
@@ -286,6 +529,7 @@ export const useSECTFStore = defineStore({
                 _trysteroRoom = null;
                 this.$patch({ ..._resetState });
             }
+            _offchainSigner = null;
             _sendMessage = null;
             _getMessage = null;
         }

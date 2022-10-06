@@ -15,7 +15,7 @@ main().catch((error) => {
 //Last elevators deployed (Arbitrum Goerli Testnet):
 //  Elevator_1 deployed to 0x643c19Bd704bB8aEcE37e233e93544a3DcB89f14
 //  Elevator_2 deployed to 0x42150F75F14607D14CE6F4bD5620023c8606D303
-
+//  Elevator_3 deployed to 0x189d2e53351383CA6Ccca25e3A564A3fdDb6762A
 
 
 //Last elevators deployed (Arbitrum Nova):

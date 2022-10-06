@@ -3,7 +3,8 @@
     import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
     import { ref, onMounted, onUnmounted, defineProps } from '@vue/runtime-core';
     import LoadingSpinner from '@/components/LoadingSpinner.vue';
-  
+    import { utils} from 'ethers';
+
     const props = defineProps(['roomId']);
     const SECTFStore = useSECTFStore();
 
@@ -11,16 +12,7 @@
     const route = useRoute();
 
     const elevatorContract = ref('');
-
-    /*
     
-    
-  
-    const roomFilled = ref(false);
-    const joiningWhileUnfinished = ref(false);
-    const timeLeft = ref(0);
-    */
-  
     onMounted(async () => {
         console.log("GameRoom.vue onMounted()");
         SECTFStore.reset();
@@ -35,11 +27,6 @@
         }
     });
 
-    async function finish() {
-        let result = await SECTFStore.exitRoom(SECTFStore.currentRoomId);
-        if (result == true) { return await router.push({ name: "Home" }); }
-    }
-
     function isAddressValid() {
         if (elevatorContract.value.length == 42) {
             try {
@@ -49,21 +36,20 @@
         return false;
     }
 
-    async function closeRoom() {
-      await tuxitStore.closeRoom(props.roomId);
-      if (tuxitStore.gameId == null) { return await router.push({ name: "Home" }); }
+    async function join() {
+        let result = await SECTFStore.joinRoom(SECTFStore.currentRoomId, elevatorContract.value);
+        if (result == true) {
+            if (SECTFStore.currentRoomStatus == 2) {
+                return await router.push({ name: "Game", params: { roomId: SECTFStore.currentRoomId }});
+            }
+        }
     }
   
-    async function joinRoom() {
-      await tuxitStore.joinRoom();
-      if (tuxitStore.roomStatus > 0) { return await router.push({ name: "Game", params: { roomId: tuxitStore.roomId }}); }
+    async function finish() {
+        let result = await SECTFStore.exitRoom(SECTFStore.currentRoomId);
+        if (result == true) { return await router.push({ name: "Home" }); }
     }
-  
-    async function activeRoom() {
-      await router.push({ name: "GameRoom", params: { roomId: tuxitStore.unfinishedRoomId }});
-      location.reload();
-    }
-  
+
     function copyUrl() {
         const splitUrl = window.location.href.split("/");
         const text =  `${splitUrl[0]}//${splitUrl[2]}${route.fullPath}`;
@@ -115,46 +101,28 @@
                         </div>
                     </div>
                 </div>
-            
-                <div id="createButton" class="button noSelect" @click="copyUrl()">Copy URL</div>
-                <div id="joinButton" class="button noSelect" :class="{'disabled': !isAddressValid() }" @click="create()" v-if="!SECTFStore.currentRoomJoined">Join</div>
+                
+                <div class="w-400 size-normal warning redText" v-if="SECTFStore.currentRoomLostKeys && SECTFStore.currentRoomJoined">WARNING: Private Keys for this game have been lost. State-Channels won't be available.</div>
+
+                <div id="copyURLButton" class="button noSelect" @click="copyUrl()" v-if="SECTFStore.currentRoomJoined">Copy URL</div>
+                <div id="joinButton" class="button noSelect" :class="{'disabled': !isAddressValid() }" @click="join()" v-if="!SECTFStore.currentRoomJoined">Join</div>
                 <div id="leaveButton" class="button noSelect redButton" @click="finish()" v-if="SECTFStore.currentRoomJoined">Leave</div>
 
                 <router-link :to="{ name: 'Home' }" id="backButton">Go Back</router-link>
-        </div>
+            </div>
 
-        <div class="flex column flex-center" v-if="SECTFStore.currentRoomStatus == 6">
+            <div class="flex column flex-center" v-if="SECTFStore.currentRoomStatus == 6">
                 <div id="title" class="w-700 size-title">GameRoom #{{SECTFStore.currentRoomId}}</div>
                 <div class="w-400 size-normal description">This GameRoom has timed out and is no longer available.</div>
                 <div class="button redButton" @click="finish()">Close GameRoom</div>
                 <router-link :to="{ name: 'Home' }" id="backButton">Go Back</router-link>
             </div>
-        
-        <!--div v-else>
-            <div v-if="tuxitStore.roomStatus == 0">
-            <div class="flex column flex-center" v-if="tuxitStore.roomCreator && tuxitStore.roomPrivateKeyLost">         
-                <div class="title red">Private Key Lost!</div>
-                <div class="description red">The private key for this match was not found. Close the room before someone joins in or you won't be able to play.</div>
-                <div id="closeButton" class="button" @click="closeRoom">Close Room</div>
+            
+            <div class='copiedNotification'>
+                <h2 id="copied" class="hide">Copied</h2>
             </div>
-            <div class="flex column flex-center" v-else>
-                <div class="title">{{tuxitStore.gameName}}</div>
-    
-                <div class="description" v-if="tuxitStore.roomCreator">The game will start when another player joins the room. Please, share the link with a friend or join from another browser to try it out.</div>
-                <div id="shareButton" @click="copyUrl()" v-if="tuxitStore.roomCreator">Copy Link</div>
-                <div id="closeButton" class="button" @click="closeRoom" v-if="tuxitStore.roomCreator">Close Room</div>
-    
-                <div class="description align-center" v-if="!tuxitStore.roomJoined">Game is set and ready to begin. Join in!</div>
-                <div id="closeButton" class="button" @click="joinRoom" v-if="!tuxitStore.roomJoined">Join Room</div>
-                <div id="timeLeft">Time left to join: {{timeLeft}}</div>
-            </div>        
-            </div>
-        </div-->
-        <div class='copiedNotification'>
-            <h2 id="copied" class="hide">Copied</h2>
         </div>
-    </div>
-  </template>
+    </template>
   
   <style scoped>
     #gameRoomContainer {
@@ -184,6 +152,7 @@
         padding: 0px 10px;
         letter-spacing: 1.2px;
         text-align: center;
+        margin-bottom: 30px;
     }
 
     .changePropButton {
@@ -220,9 +189,6 @@
       margin-top: 20px;
     }
   
-    #createButton {
-        width: 100%;
-    }
 
     .disabled {
         background-color: var(--grey) !important;
@@ -260,11 +226,16 @@
     }
 
 
+    .warning {
+        width: 100%;
+        margin-bottom: 20px;
+        text-align: center;
+    }
 
-
-
-
-
+    .redText {
+        color: var(--red);
+        font-weight: 500;
+    }
   
     .copiedNotification {
       position: fixed;
