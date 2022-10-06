@@ -14,11 +14,11 @@ abstract contract Elevator is IElevator {
 
     SolidityElevatorCTF.ElevatorUpdate private lastUpdate;
 
-    function getLastUpdate() public view returns (SolidityElevatorCTF.ElevatorUpdate memory) {
+    function getLastUpdate() external view returns (SolidityElevatorCTF.ElevatorUpdate memory) {
         return lastUpdate;
     }
 
-    function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return interfaceId == type(IElevator).interfaceId;
     }
 

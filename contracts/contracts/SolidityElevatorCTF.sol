@@ -13,7 +13,6 @@ import "./utils/SignedWadMath.sol";
 import "./utils/DRNG.sol";
 
 import "./IElevator.sol";
-import "./Elevator.sol";
 import "hardhat/console.sol";
 
 contract SolidityElevatorCTF {
@@ -27,7 +26,7 @@ contract SolidityElevatorCTF {
     event GameRoomPlayerLeft(uint256 indexed id, address player);
     event GameRoomReady(uint256 indexed id);
     event GameRoomCancelled(uint256 indexed id);
-    event GameRoomTimeout(uint256 indexed id);
+    event GameRoomUpdated(uint256 indexed id);
     event GameRoomFinished(uint256 indexed id, address winner);
 
     /*//////////////////////////////////////////////////////////////
@@ -43,7 +42,6 @@ contract SolidityElevatorCTF {
     uint8 private constant MAX_FLOORS = 8;
     uint8 private constant MIN_SCORE_TO_WIN = 1;
     uint8 private constant MAX_SCORE_TO_WIN = 100;    
-    uint32 private constant MAX_ROOM_TIME = 1 hours;
     
     uint16 private constant SOFT_TURN_DEADLINE = 1000;
     uint16 private constant HARD_TURN_DEADLINE = 1200;
@@ -55,10 +53,9 @@ contract SolidityElevatorCTF {
     uint8 private constant ELEVATOR_INITIAL_SPEED = 10;
     uint8 private constant ELEVATOR_MAX_SPEED = 100;
     uint8 private constant ELEVATOR_MAX_FLOOR_QUEUE = 8;
-    uint16 private constant ELEVATOR_INITIAL_POSITION = 0;
     uint32 private constant ELEVATOR_INITIAL_BALANCE = 15000;
 
-    uint32 private constant MAX_GAS_FOR_ON_CHAIN_TURN = 6_000_000;
+    uint32 private constant MAX_GAS_FOR_ON_CHAIN_TURN = 4_000_000;
     
     /*//////////////////////////////////////////////////////////////
                       ACTIONS & PRICING CONSTANTS
@@ -95,7 +92,7 @@ contract SolidityElevatorCTF {
 
     //This struct is used to store the complete data for each Elevator
     struct ElevatorData {
-        Elevator elevator;
+        IElevator elevator;
         ElevatorStatus status;
         ElevatorLight light;
         uint8 score;            // Total number of passengers taken to destination
@@ -135,9 +132,8 @@ contract SolidityElevatorCTF {
         bytes32 data;               // Arbitrary data to be updated;
     }
 
-    function initialElevatorData(Elevator elevator) private pure returns (ElevatorData memory) {
-        uint8[] memory _passengers;
-        uint8[] memory _floorQueue;
+    function initialElevatorData(IElevator elevator) private pure returns (ElevatorData memory) {
+        uint8[] memory _empty;
         
         return ElevatorData(
             elevator,
@@ -145,11 +141,11 @@ contract SolidityElevatorCTF {
             ElevatorLight.Off,
             0,
             0,
-            _floorQueue,
-            _passengers,
+            _empty,
+            _empty,
             ELEVATOR_INITIAL_BALANCE,
             ELEVATOR_INITIAL_SPEED,
-            ELEVATOR_INITIAL_POSITION,
+            0,
             bytes32(0)
         );
     }
@@ -158,14 +154,13 @@ contract SolidityElevatorCTF {
                     GAME ROOMS STRUCTS AND STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    enum GameRoomStatus { Uninitialized, Created, Ready, FinishedWithWinner, FinishedWithoutWinner, Cancelled, Timeout }
+    enum GameRoomStatus { Uninitialized, Created, Ready, FinishedWithWinner, FinishedWithoutWinner, Cancelled }
 
     struct GameRoom {
         GameRoomStatus status;
         uint8 numberOfPlayers;
         uint8 floors;
         uint8 scoreToWin;
-        uint32 deadline;
         address[] players;
         uint8[] indices;
         address[] offchainPublicKeys;
@@ -197,37 +192,13 @@ contract SolidityElevatorCTF {
                         GAME ROOM MANAGMENT
     //////////////////////////////////////////////////////////////*/
 
-    function getGameRoom(uint256 id) external view returns (GameRoom memory) {
-        GameRoom memory _room = gameRooms[id];
-        if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
-
-        preventElevatorCall(elevatorsData[id], msg.sender);
-
-        if (_room.status == GameRoomStatus.Created || _room.status != GameRoomStatus.Ready) {
-            if (block.timestamp > _room.deadline) {
-                _room.status = GameRoomStatus.Timeout;
-            }
-        }
-        return _room;
-    }
-
-    function getElevatorData(uint256 id) external view returns (ElevatorData[] memory) {
-        GameRoom memory _room = gameRooms[id];
-        if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
+    function getGameState(uint256 id) external view returns (GameRoom memory, ElevatorData[] memory, FloorPassengerData[] memory) {
+        if (gameRooms[id].status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
 
         ElevatorData[] memory _elevatorsData = elevatorsData[id];
         preventElevatorCall(_elevatorsData, msg.sender);
-        return _elevatorsData;
-    }
 
-    function getFloorPassengersData(uint256 id) external view returns (FloorPassengerData[] memory) {
-        GameRoom memory _room = gameRooms[id];
-        if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
-
-        preventElevatorCall(elevatorsData[id], msg.sender);
-
-        FloorPassengerData[] memory _floorPassengersData = floorPassengersData[id];
-        return _floorPassengersData;
+        return (gameRooms[id], _elevatorsData, floorPassengersData[id]);
     }
 
     function getPlayerActiveRooms() external view returns (uint256[] memory, GameRoom[] memory) {
@@ -238,7 +209,7 @@ contract SolidityElevatorCTF {
         return (playerGameRoomIds[msg.sender], _rooms);
     }
 
-    function createGameRoom(uint8 numberOfPlayers, uint8 floors, uint8 scoreToWin, Elevator elevator, address offchainPublicKey) external {
+    function createGameRoom(uint8 numberOfPlayers, uint8 floors, uint8 scoreToWin, IElevator elevator, address offchainPublicKey) external {
         if (numberOfPlayers == 0 || numberOfPlayers > MAX_PLAYERS) { revert WrongSettings(); }
         if (floors < MIN_FLOORS || floors > MAX_FLOORS) { revert WrongSettings(); }
         if (scoreToWin < MIN_SCORE_TO_WIN || scoreToWin > MAX_SCORE_TO_WIN) { revert WrongSettings(); }
@@ -261,20 +232,16 @@ contract SolidityElevatorCTF {
                 floorPassengersData[totalGameRooms].push(FloorPassengerData(_passengers));
             }
 
-            //TODO: Replace with better Entropy Generation or VRF?
-            uint64[2] memory _firstSeed = DRNG.seed(uint64(uint256(blockhash(block.number - 1))));
-
             GameRoom memory _room = GameRoom(
                 GameRoomStatus.Ready,
                 numberOfPlayers,
                 floors,
                 scoreToWin,
-                uint32(block.timestamp) + MAX_ROOM_TIME,
                 _players,
                 _indices,
                 _offchainPublicKeys,
                 1, 0,
-                _firstSeed,
+                DRNG.seed(uint64(uint256(blockhash(block.number - 1)))),
                 _actionsSold
             );   
             gameRooms[totalGameRooms] = _room;
@@ -285,7 +252,6 @@ contract SolidityElevatorCTF {
                 numberOfPlayers,
                 floors,
                 scoreToWin,
-                uint32(block.timestamp) + MAX_ROOM_TIME,
                 _players,
                 _indices,
                 _offchainPublicKeys,
@@ -307,15 +273,6 @@ contract SolidityElevatorCTF {
 
         if (_room.status == GameRoomStatus.Uninitialized) { revert GameRoomUnavailable(id); }
         
-        if (block.timestamp > _room.deadline) {
-            _room.status = GameRoomStatus.Timeout;
-            emit GameRoomTimeout(id);
-            for (uint8 i=0; i<_room.players.length; i++) {
-                removeFromActiveGameRooms(id, _room.players[i]);
-            }
-            return;
-        }
-
         if (_room.status == GameRoomStatus.Created) {
             if (_room.players[0] == msg.sender) { 
                 _room.status = GameRoomStatus.Cancelled;
@@ -342,16 +299,10 @@ contract SolidityElevatorCTF {
         }
     }
 
-    function joinGameRoom(uint256 id, Elevator elevator, address offchainPublicKey) external {
+    function joinGameRoom(uint256 id, IElevator elevator, address offchainPublicKey) external {
         GameRoom storage _room = gameRooms[id];
         if (_room.status != GameRoomStatus.Created) { revert GameRoomUnavailable(id); }
         if (!elevator.supportsInterface(type(IElevator).interfaceId)) { revert WrongElevatorInterface(); }
-
-        if (block.timestamp > _room.deadline) {
-            _room.status = GameRoomStatus.Timeout;
-            emit GameRoomTimeout(id);
-            return;
-        }
 
         ElevatorData[] storage _elevatorsData = elevatorsData[id];
         
@@ -392,11 +343,59 @@ contract SolidityElevatorCTF {
     }
 
     /*//////////////////////////////////////////////////////////////
+                        OFF-CHAIN STATE LOADING
+    //////////////////////////////////////////////////////////////*/
+
+    function hashCheckpoint(uint256 id, uint16 turn, uint8 status, uint8[] memory indices, uint64[2] memory randomSeed, uint8 waitingPassengers, ElevatorData[] memory elevData, FloorPassengerData[] memory floorData) public pure returns (bytes32) {
+        return keccak256(abi.encode(id, turn, status, indices, randomSeed, waitingPassengers, elevData, floorData));
+    }
+
+    function loadCheckpoint(uint256 id, uint16 turn, uint8 status, uint8[] memory indices, uint64[2] memory randomSeed, uint8 waitingPassengers, ElevatorData[] memory elevData, FloorPassengerData[] memory floorData, bytes[] memory signature) external {
+        GameRoom memory _room = gameRooms[id];
+        if (_room.status != GameRoomStatus.Ready) { revert GameRoomUnavailable(id); }
+
+        require(_room.offchainPublicKeys.length == signature.length);
+        require(_room.turn < turn);
+
+        emit GameRoomUpdated(id);
+
+        bytes32 hashedCheckpoint = hashCheckpoint(id, turn, status, indices, randomSeed, waitingPassengers, elevData, floorData);
+        bytes32 hashedCheckpointMessage = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hashedCheckpoint));
+
+        for (uint256 i=0; i<_room.offchainPublicKeys.length; i++) {
+            address _recovered = recoverSigner(hashedCheckpointMessage, signature[i]);
+            require (_recovered == _room.offchainPublicKeys[i]);
+        }
+
+        _room.turn = turn;
+        _room.status = GameRoomStatus(status);
+        _room.indices = indices;
+        _room.randomSeed = randomSeed;
+        _room.waitingPassengers = waitingPassengers;
+
+        gameRooms[id] = _room;
+        elevatorsData[id] = elevData;
+        floorPassengersData[id] = floorData;
+    }
+
+    function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _signature) internal pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s,uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
                               CORE GAME
     //////////////////////////////////////////////////////////////*/
 
-    //TODO: Add function to load a state from signed data
-    
     function play(uint256 gameRoomId, uint16 turnsToPlay) external {
         require(turnsToPlay > 0);
 
@@ -404,15 +403,6 @@ contract SolidityElevatorCTF {
         ElevatorData[] memory _elevatorsData = elevatorsData[gameRoomId];
     
         if (_room.status > GameRoomStatus.Ready) { revert GameRoomPlayOnFinished(gameRoomId); }
-
-        if (block.timestamp > _room.deadline) {
-            _room.status = GameRoomStatus.Timeout;
-            emit GameRoomTimeout(gameRoomId);
-            for (uint8 i=0; i<_room.players.length; i++) {
-                removeFromActiveGameRooms(gameRoomId, _room.players[i]);
-            }
-            return;
-        }
 
         FloorButtons[] memory _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
         uint8[] memory _topScoreElevators = calculateTopScoreElevators(_elevatorsData);
@@ -493,8 +483,8 @@ contract SolidityElevatorCTF {
                                     _elevatorsData[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
                                 }
 
-                                console.log("SPEED_UP on Turn", _room.turn, "- elevator", _currentElevatorId);
-                                console.log(" --> Increased speed to", _elevatorsData[_currentElevatorId].speed, "and is left with a balance of", _elevatorsData[_currentElevatorId].balance);
+                                //console.log("SPEED_UP on Turn", _room.turn, "- elevator", _currentElevatorId);
+                                //console.log(" --> Increased speed to", _elevatorsData[_currentElevatorId].speed, "and is left with a balance of", _elevatorsData[_currentElevatorId].balance);
 
                             } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed >= 2)) {
 
@@ -507,8 +497,8 @@ contract SolidityElevatorCTF {
                                     _elevatorsData[_update.target].speed = 1;
                                 }
 
-                                console.log("SLOW_DOWN on Turn", _room.turn, "- elevator", _currentElevatorId);
-                                console.log(" --> Decreased speed of elevator", _update.target, "to", _elevatorsData[_update.target].speed);
+                                //console.log("SLOW_DOWN on Turn", _room.turn, "- elevator", _currentElevatorId);
+                                //console.log(" --> Decreased speed of elevator", _update.target, "to", _elevatorsData[_update.target].speed);
                                 //console.log("Left with", _elevatorsData[_currentElevatorId].balance);
 
                             }
@@ -521,19 +511,7 @@ contract SolidityElevatorCTF {
 
                     //Floor Queue is managed in storage. It can be fully replaced or added to the current queue.
                     if (_update.replaceFloorQueue) {
-                        //If fully replaced, we first remove any excess items in storage
-                        while (_update.floorQueue.length > elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length) {
-                            elevatorsData[gameRoomId][_currentElevatorId].floorQueue.pop();
-                        }
-                        //We then loop through the update queue and update the storage (pushing or replacing)
-                        for (uint256 i=0; i<_update.floorQueue.length; i++) {
-                            if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length > i) {
-                                elevatorsData[gameRoomId][_currentElevatorId].floorQueue[i] = _update.floorQueue[i];
-                            } else {
-                                if (elevatorsData[gameRoomId][_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
-                                elevatorsData[gameRoomId][_currentElevatorId].floorQueue.push(_update.floorQueue[i]);
-                            }
-                        }
+                        elevatorsData[gameRoomId][_currentElevatorId].floorQueue = _update.floorQueue;
                     } else {
                         //If update queue only asks to be added to the current queue, we just loop and push to storage
                         for (uint256 i=0; i<_update.floorQueue.length; i++) {
@@ -698,7 +676,7 @@ contract SolidityElevatorCTF {
                     _room.turn++;
                     //if HARD_TURN_DEADLINE is reached, the game is probably on an infinite loop. Finish it without a winner
                     if (_room.turn > HARD_TURN_DEADLINE) {
-                        console.log("HARD DEADLINE!");
+                        //("HARD DEADLINE!");
                         _room.status = GameRoomStatus.FinishedWithoutWinner;
                         break;
                     }
@@ -724,6 +702,8 @@ contract SolidityElevatorCTF {
                 elevatorsData[gameRoomId][i].data = _elevatorsData[i].data;
             }
         }
+
+        emit GameRoomUpdated(gameRoomId);
     }
     
     /*//////////////////////////////////////////////////////////////

@@ -20,8 +20,6 @@ describe("Gameplay", function () {
     return { SECTF, owner, player1, player2, player3, player4 };
   }
 
-  describe("Play complete games", function () {
-
     it("Should play a complete game", async function () {
         const { SECTF, owner, player1, player2, player3, player4 } = await loadFixture(initialize);
         
@@ -35,7 +33,7 @@ describe("Gameplay", function () {
         //const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
         //await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
   
-        let gameRoom = await SECTF.getGameRoom(0);
+        let gameRoom = (await SECTF.getGameState(0))[0];
         console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
   
         while (true) {
@@ -44,7 +42,7 @@ describe("Gameplay", function () {
             await receipt.wait();
           } catch(err) {}
 
-          gameRoom = await SECTF.getGameRoom(0);
+          gameRoom = (await SECTF.getGameState(0))[0];
           console.log(`GameRoom's turn is now: ${gameRoom.turn} and status is ${gameRoom.status}`);
           
           if (gameRoom.status != 2) { break; }
@@ -52,8 +50,6 @@ describe("Gameplay", function () {
 
         expect(gameRoom.status).to.gt(2);
       });
-  
-    });
 });
 
 function sleep(ms) {
