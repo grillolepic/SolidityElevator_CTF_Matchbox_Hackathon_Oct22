@@ -40,9 +40,18 @@
 
 <template>
     <div>
-        <div class="flex flex-center noSelect button size-normal w-500" @click="action" @mouseover="hovering = true" @mouseleave="hovering = false">{{label}}</div>
+        <div id="connectButton" class="flex flex-center column noSelect button size-normal w-500" @click="action" @mouseover="hovering = true" @mouseleave="hovering = false">{{label}}<br><span class="smol" v-if="ethereumStore.networkName.length > 0 && ethereumStore.defaultNetworkName != ethereumStore.networkName">({{ethereumStore.networkName}})</span></div>
     </div>
 </template>
 
 <style scoped>
+    #connectButton {
+        width: 300px;
+        height: 50px;
+        text-align: center;
+    }
+
+    .smol {
+        font-size: 8px;
+    }
 </style>

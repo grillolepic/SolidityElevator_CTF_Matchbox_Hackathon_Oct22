@@ -1,14 +1,13 @@
 import { defineStore } from 'pinia';
 import detectEthereumProvider from '@metamask/detect-provider';
-import { providers, Contract, utils} from 'ethers';
-import { networkNames, solidityElevatorContractAddress, supportedChainIds, defaultNetwork } from '@/helpers/blockchainConstants';
-
-import SOLIDITY_ELEVATOR_CTF_ABI from './abi/solidityElevatorCTF.json';
+import { useSECTFStore } from './sectf';
+import { providers, utils} from 'ethers';
+import { networkNames, supportedChainIds, defaultNetwork } from '@/helpers/blockchainConstants';
 
 let _metamaskProvider = null;
 let _ethersProvider = null;
 let _ethersSigner = null;
-let _solidityElevatorContract = null;
+let _SECTFStore = null;
 
 let _initialState = {
   initialized: false,
@@ -20,8 +19,7 @@ let _initialState = {
   networkName: '',
   defaultNetworkName: networkNames[defaultNetwork.chainId],
   error: null,
-  balance: null,
-  contractAddress: ''
+  balance: null
 };
 
 const fixedEthereumProvider = new providers.JsonRpcProvider("https://rpc.ankr.com/eth");
@@ -47,6 +45,8 @@ export const useEthereumStore = defineStore({
     async init(force = false) {
       console.log(`ethereum: init(${force})`);
     
+      _SECTFStore = useSECTFStore();
+
       const metamaskProvider = await detectEthereumProvider();
       if (metamaskProvider) {
         _metamaskProvider = metamaskProvider;
@@ -175,22 +175,20 @@ export const useEthereumStore = defineStore({
       this.findENS();
 
       try {
+
+        this.$patch({
+          initialized: true,
+          connected: true,
+          connecting: false
+        });
+
         if (this.networkOk) {
-          console.log(" - login() > Initializing Contracts...");
-          
+          _SECTFStore.init();
           this.updateBalance();
-
-          this.contractAddress = solidityElevatorContractAddress[this.chainId];
-
-          _solidityElevatorContract = new Contract(this.contractAddress, SOLIDITY_ELEVATOR_CTF_ABI, _ethersSigner);
         }
 
         localStorage.setItem("wasConnected", true);
     
-        this.$patch({
-          connected: true,
-          connecting: false
-        });
       } catch (err) {
         console.log(err);
         this.logout();
@@ -207,8 +205,8 @@ export const useEthereumStore = defineStore({
     },
     
     async updateBalance() {
-      let balance = await _ethersProvider.getBalance(this,address);
-      context.commit("balance", balance);
+      let balance = await _ethersProvider.getBalance(this.address);
+      this.balance = balance;
     },
 
     logout() {

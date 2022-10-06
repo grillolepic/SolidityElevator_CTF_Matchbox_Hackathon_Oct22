@@ -8,7 +8,7 @@
 <template>
     <div class="flex row" id="Navbar">
         <router-link :to="{ name: 'Home' }">
-            <div id="logo" class="size-big size-title w-700 noSelect">SolidityElevator</div>
+            <div id="logo" class="size-big size-title w-700 noSelect">SolidityElevatorCTF</div>
         </router-link>
         
         <ConnectButton v-if="type!='xs'"/>

@@ -54,20 +54,8 @@ body {
   background-position: center;
 }
 
-.image404 {
-  background-image: url(/img/404.png);
-}
-
-.tuxitLogo {
-  background-image: url(/img/tuxit_logo.png);
-}
-
 .spinner {
   background-image: url(/img/spinner.svg);
-}
-
-.starkNetLogo {
-  background-image: url(/img/starknet_logo.png);
 }
 
 .noSelect{
@@ -80,16 +68,18 @@ body {
 }
 
 a {
+  color: var(--dark-blue) !important;
   margin: 5px;
   text-align: center;
   text-decoration: none;
 }
 
 a:hover {
-  
+  color: var(--gradient-4) !important;
 }
 
 a:visited {
+  color: var(--dark-blue) !important;
   text-decoration: none;
 }
 
@@ -100,8 +90,8 @@ a:visited {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-width: 300px;
-  min-height: 50px;
+  width: 400px;
+  height: 40px;
   font-weight: normal;
 }
 
@@ -115,11 +105,15 @@ a:visited {
 }
 
 .size-title {
-  font-size: 21px;
+  font-size: 24px;
 }
 
 .size-normal {
   font-size: 14px;
+}
+
+.size-small {
+  font-size: 12px;
 }
 
 .w-700 {
@@ -128,4 +122,12 @@ a:visited {
 
 .w-500 {
   font-weight: 500;
+}
+
+.w-400 {
+  font-weight: 400;
+}
+
+.w-200 {
+  font-weight: 200;
 }

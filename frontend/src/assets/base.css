@@ -3,6 +3,7 @@
   --white: #ffffff;
   --white-soft: #f8f8f8;
   --white-mute: #f2f2f2;
+  --grey: #dbdbdb;
 
   --gradient-7: #CFF09E;
   --gradient-6: #BBE79D;
@@ -13,7 +14,9 @@
   --gradient-1: #2A546F;
   --gradient-0: #0B486B;
 
-  --dark-blue: #062735;
+  --dark-blue: #02141c;
+  --red: #ae4d4d;
+  --dark-red: #772727;
 
   --color-background: var(--white-mute);
   --color-text: var(--dark-blue)

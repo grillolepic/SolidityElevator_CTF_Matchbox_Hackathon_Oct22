@@ -9,12 +9,10 @@ const router = createRouter({
       name: 'Home',
       component: HomeView
     },
-    /*
     {
-      path: '/createRoom/:gameId',
+      path: '/createRoom',
       name: 'CreateRoom',
       component: () => import('../views/CreateRoom.vue'),
-      props: true
     },
     {
       path: '/room/:roomId',
@@ -27,7 +25,6 @@ const router = createRouter({
       name: 'Game',
       component: () => import('../views/Game.vue')
     },
-    */
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',

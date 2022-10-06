@@ -15,7 +15,7 @@
     <RouterView/>
   </div>
   <div v-else-if="ethereumStore.initialized" class="flex flex-center column">
-    <div id="logo" class="size-big size-title w-700 noSelect">SolidityElevator</div>
+    <div id="logo" class="size-big w-700 noSelect">SolidityElevatorCTF</div>
     <ConnectButton/>
   </div>
 </template>
@@ -28,5 +28,6 @@
   #logo {
     color: var(--dark-blue) !important;
     margin-bottom: 20px;
+    font-size: 48px;
   }
 </style>
