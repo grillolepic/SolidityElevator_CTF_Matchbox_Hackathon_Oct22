@@ -427,9 +427,7 @@ export const useSECTFStore = defineStore({
                 console.log("       - Updated Checkpoint from blockchain state");
             }
 
-
-
-            //04. Connect with other player via P2P and exchange signed ids before beginning sync
+            //04. Connect with other player via WebRTC and exchange signed ids before beginning sync
             this.gameInternalStatus = 1;
             
             _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
@@ -486,16 +484,19 @@ export const useSECTFStore = defineStore({
                 } catch(err) {
                     console.log(err);
                 }
-
             } else if (this.gameInternalStatus == 2 && message.type == "sync_checkpoint") {
-                /*
                 try {
                     //01. First, validate the signature
                     let receivedCheckpoint = JSON.parse(JSON.stringify(message.data.data));
                     
-                    const otherPlayerNumber = (this.playerNumber == 0)?1:0;
-                    let verify = TuxitCrypto.verifySignature(receivedCheckpoint, message.data.signatures[otherPlayerNumber], _keyPairs[otherPlayerNumber]);
-                    if (!verify.verified) { throw Error("Wrong signature"); }
+                    const otherPlayerNumber = this.gamePeers[peerId].playerNumber;
+
+                    
+
+
+
+
+
 
                     //02. Then, make sure that the checkpoint is equal to the user's stored checkpoint
                     if (verify.hashedData != this.gameCheckpoint.hash) {
@@ -553,12 +554,12 @@ export const useSECTFStore = defineStore({
                             _sendMessage({type: "sync_actions", data: this.gameActions});
                         }, 1000);
                     }
+                    */
                 } catch (err) {
                     console.log(err);
-                    this.gameCheckpoint = null;
-                    this.gameStatus = -3;
+                    this.gameLastCheckpoint = null;
+                    this.gameStatus = -2;
                 }
-                */
             }
         },
 
