@@ -20,6 +20,10 @@
         return await router.push({ name: "Home" });
       }
     });
+
+    function playOnChain(turns) {
+      SECTFStore.playOnChain(turns);
+    }
     
     onBeforeRouteLeave((to, from, next) => { SECTFStore.leave(); next(); });
     onUnmounted((to, from, next) => { SECTFStore.leave(); });
@@ -34,6 +38,8 @@
       <div id="loadingMessage" v-else-if="SECTFStore.gameInternalStatus >= 2 && SECTFStore.gameInternalStatus < 5">Syncing</div>
       <div id="loadingMessage" v-else-if="SECTFStore.gameInternalStatus == 5">Initializing</div>
     </div>
+
+    <div class="button" @click="playOnChain(10)">Play 10 Turns</div>
 </template>
 
 <script>

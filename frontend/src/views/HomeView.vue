@@ -25,11 +25,8 @@
     <div id="continueGames" class="flex flex-center row">
       <div id="continueGameItem" v-for="gameRoom in SECTFStore.activeGameRooms" :key="gameRoom.id">
         <router-link :to="{ name: 'GameRoom', params: { roomId: gameRoom.id}}">
-          <div class="button gameRoomButton" v-if="gameRoom.status != 6">Continue<br>GameRoom #{{gameRoom.id}}</div>
+          <div class="button gameRoomButton">Continue<br>GameRoom #{{gameRoom.id}}</div>
         </router-link>
-      </div>
-      <div id="continueGameItem" v-for="gameRoom in SECTFStore.activeGameRooms" :key="gameRoom.id">
-        <div class="button gameRoomButton redButton" v-if="gameRoom.status == 6" @click="finish(gameRoom.id)">Close GameRoom #{{gameRoom.id}}<br>(Past Deadline)</div>
       </div>
     </div>
 

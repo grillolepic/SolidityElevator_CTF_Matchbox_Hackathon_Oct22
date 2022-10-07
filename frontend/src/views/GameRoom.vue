@@ -110,13 +110,6 @@
 
                 <router-link :to="{ name: 'Home' }" id="backButton">Go Back</router-link>
             </div>
-
-            <div class="flex column flex-center" v-if="SECTFStore.currentRoomStatus == 6">
-                <div id="title" class="w-700 size-title">GameRoom #{{SECTFStore.currentRoomId}}</div>
-                <div class="w-400 size-normal description">This GameRoom has timed out and is no longer available.</div>
-                <div class="button redButton" @click="finish()">Close GameRoom</div>
-                <router-link :to="{ name: 'Home' }" id="backButton">Go Back</router-link>
-            </div>
             
             <div class='copiedNotification'>
                 <h2 id="copied" class="hide">Copied</h2>

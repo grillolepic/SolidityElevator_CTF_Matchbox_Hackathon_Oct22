@@ -195,7 +195,7 @@
         "type": "uint256"
       }
     ],
-    "name": "GameRoomTimeout",
+    "name": "GameRoomUpdated",
     "type": "event"
   },
   {
@@ -229,7 +229,7 @@
         "type": "uint8"
       },
       {
-        "internalType": "contract Elevator",
+        "internalType": "contract IElevator",
         "name": "elevator",
         "type": "address"
       },
@@ -299,12 +299,74 @@
         "type": "uint256"
       }
     ],
-    "name": "getElevatorData",
+    "name": "getGameState",
     "outputs": [
       {
         "components": [
           {
-            "internalType": "contract Elevator",
+            "internalType": "enum SolidityElevatorCTF.GameRoomStatus",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "numberOfPlayers",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "floors",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "scoreToWin",
+            "type": "uint8"
+          },
+          {
+            "internalType": "address[]",
+            "name": "players",
+            "type": "address[]"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "indices",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "address[]",
+            "name": "offchainPublicKeys",
+            "type": "address[]"
+          },
+          {
+            "internalType": "uint16",
+            "name": "turn",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint8",
+            "name": "waitingPassengers",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint64[2]",
+            "name": "randomSeed",
+            "type": "uint64[2]"
+          },
+          {
+            "internalType": "uint256[2]",
+            "name": "actionsSold",
+            "type": "uint256[2]"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.GameRoom",
+        "name": "",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "contract IElevator",
             "name": "elevator",
             "type": "address"
           },
@@ -362,21 +424,7 @@
         "internalType": "struct SolidityElevatorCTF.ElevatorData[]",
         "name": "",
         "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      }
-    ],
-    "name": "getFloorPassengersData",
-    "outputs": [
+      },
       {
         "components": [
           {
@@ -388,87 +436,6 @@
         "internalType": "struct SolidityElevatorCTF.FloorPassengerData[]",
         "name": "",
         "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      }
-    ],
-    "name": "getGameRoom",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "enum SolidityElevatorCTF.GameRoomStatus",
-            "name": "status",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint8",
-            "name": "numberOfPlayers",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint8",
-            "name": "floors",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint8",
-            "name": "scoreToWin",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint32",
-            "name": "deadline",
-            "type": "uint32"
-          },
-          {
-            "internalType": "address[]",
-            "name": "players",
-            "type": "address[]"
-          },
-          {
-            "internalType": "uint8[]",
-            "name": "indices",
-            "type": "uint8[]"
-          },
-          {
-            "internalType": "address[]",
-            "name": "offchainPublicKeys",
-            "type": "address[]"
-          },
-          {
-            "internalType": "uint16",
-            "name": "turn",
-            "type": "uint16"
-          },
-          {
-            "internalType": "uint8",
-            "name": "waitingPassengers",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint64[2]",
-            "name": "randomSeed",
-            "type": "uint64[2]"
-          },
-          {
-            "internalType": "uint256[2]",
-            "name": "actionsSold",
-            "type": "uint256[2]"
-          }
-        ],
-        "internalType": "struct SolidityElevatorCTF.GameRoom",
-        "name": "",
-        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -504,11 +471,6 @@
             "internalType": "uint8",
             "name": "scoreToWin",
             "type": "uint8"
-          },
-          {
-            "internalType": "uint32",
-            "name": "deadline",
-            "type": "uint32"
           },
           {
             "internalType": "address[]",
@@ -562,7 +524,125 @@
         "type": "uint256"
       },
       {
-        "internalType": "contract Elevator",
+        "internalType": "uint16",
+        "name": "turn",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8[]",
+        "name": "indices",
+        "type": "uint8[]"
+      },
+      {
+        "internalType": "uint64[2]",
+        "name": "randomSeed",
+        "type": "uint64[2]"
+      },
+      {
+        "internalType": "uint8",
+        "name": "waitingPassengers",
+        "type": "uint8"
+      },
+      {
+        "components": [
+          {
+            "internalType": "contract IElevator",
+            "name": "elevator",
+            "type": "address"
+          },
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorStatus",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorLight",
+            "name": "light",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "score",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "targetFloor",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "floorQueue",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "passengers",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "uint32",
+            "name": "balance",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint8",
+            "name": "speed",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint16",
+            "name": "y",
+            "type": "uint16"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "data",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.ElevatorData[]",
+        "name": "elevData",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8[]",
+            "name": "passengers",
+            "type": "uint8[]"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.FloorPassengerData[]",
+        "name": "floorData",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "hashCheckpoint",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "contract IElevator",
         "name": "elevator",
         "type": "address"
       },
@@ -573,6 +653,123 @@
       }
     ],
     "name": "joinGameRoom",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint16",
+        "name": "turn",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8[]",
+        "name": "indices",
+        "type": "uint8[]"
+      },
+      {
+        "internalType": "uint64[2]",
+        "name": "randomSeed",
+        "type": "uint64[2]"
+      },
+      {
+        "internalType": "uint8",
+        "name": "waitingPassengers",
+        "type": "uint8"
+      },
+      {
+        "components": [
+          {
+            "internalType": "contract IElevator",
+            "name": "elevator",
+            "type": "address"
+          },
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorStatus",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorLight",
+            "name": "light",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "score",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "targetFloor",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "floorQueue",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "passengers",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "uint32",
+            "name": "balance",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint8",
+            "name": "speed",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint16",
+            "name": "y",
+            "type": "uint16"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "data",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.ElevatorData[]",
+        "name": "elevData",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8[]",
+            "name": "passengers",
+            "type": "uint8[]"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.FloorPassengerData[]",
+        "name": "floorData",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "signature",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "loadCheckpoint",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
