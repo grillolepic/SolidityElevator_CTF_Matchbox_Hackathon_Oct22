@@ -1,9 +1,16 @@
 import { computed, onMounted, onUnmounted, ref } from "vue"
 
 export default function () {
-  let windowWidth = ref(window.innerWidth)
+  let windowWidth = ref(window.innerWidth);
+  let windowHeight = ref(window.innerHeight);
 
-  const onWidthChange = () => windowWidth.value = window.innerWidth
+  const onWidthChange = () => {
+    windowWidth.value = window.innerWidth;
+    windowHeight.value = window.innerHeight;
+
+    console.log(windowHeight.value);
+  }
+
   onMounted(() => window.addEventListener('resize', onWidthChange))
   onUnmounted(() => window.removeEventListener('resize', onWidthChange))
   
@@ -14,7 +21,8 @@ export default function () {
     return null;
   })
 
-  const width = computed(() => windowWidth.value)
+  const width = computed(() => windowWidth.value);
+  const height = computed(() => windowHeight.value);
 
-  return { width, type }
+  return { width, height, type }    
 }

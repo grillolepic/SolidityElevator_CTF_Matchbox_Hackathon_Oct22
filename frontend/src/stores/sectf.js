@@ -548,13 +548,18 @@ export const useSECTFStore = defineStore({
             if (this.currentRoom.numberOfPlayers > 1) {
                 if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
 
-                    this.gameInternalStatus = 1;
                     let peersTurnMode = [];
                     let peersOnline = [];
                     for (let i=0; i<this.currentRoom.numberOfPlayers; i++) {
                         peersTurnMode.push(0);
                         peersOnline.push(i == this.currentRoomPlayerNumber);
                     }
+
+                    this.$patch({
+                        gamePeersTurnMode: peersTurnMode,
+                        gamePeersOnline: peersOnline,
+                        gameInternalStatus: 1
+                    });
                     
                     _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
 
@@ -623,6 +628,9 @@ export const useSECTFStore = defineStore({
                                     playerNumber: playerNumber,
                                     address: receivedAddress
                                 }
+
+                                this.gamePeersOnline[playerNumber] = true;
+
                                 console.log(` > Player #${playerNumber} (${receivedAddress}) joined the game`);
                                 this.updatePlayers();
                             } else { console.log(` > id rejected because provided signature could not be verified`); }

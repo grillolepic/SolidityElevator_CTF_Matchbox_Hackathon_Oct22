@@ -58,7 +58,8 @@
 
 <style scoped>
     #gameOverContainer {
-        height: calc(100vh - 150px);
+        margin-top: 40px;
+        height: 100%;
     }
 
     #loadingMessage {
@@ -69,6 +70,6 @@
 
     #gameContainer {
         width: 100vw;
-        height: 80vh;
+        height: 800px;
     }
 </style>

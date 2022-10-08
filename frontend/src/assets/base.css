@@ -21,7 +21,10 @@
   --dark-red: #772727;
 
   --color-background: var(--white-mute);
-  --color-text: var(--dark-blue)
+  --color-text: var(--dark-blue);
+
+  --game-height: 800px;
+  --game-width: 1300px;
 }
 
 *,
