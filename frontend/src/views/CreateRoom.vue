@@ -8,7 +8,7 @@
     import LoadingSpinner from '@/components/LoadingSpinner.vue';
 
     const ethereumStore = useEthereumStore();
-    const sectfStore = useSECTFStore();
+    const SECTFStore = useSECTFStore();
     const router = useRouter();
 
     const elevatorContract = ref('');
@@ -18,7 +18,7 @@
 
     async function create() {
       if (isAddressValid()) {
-        let createdId = await sectfStore.createRoom(numberOfPlayers.value, floors.value, scoreToWin.value, elevatorContract.value);
+        let createdId = await SECTFStore.createRoom(numberOfPlayers.value, floors.value, scoreToWin.value, elevatorContract.value);
         if (createdId != null) {
             router.push({ name: "GameRoom", params: { roomId: createdId.toString() }});
         }
@@ -53,7 +53,7 @@
   
   <template>
     <div class="flex column flex-center">
-        <div id="loadingContainer" class="flex column flex-center" v-if="sectfStore.creatingRoom">
+        <div id="loadingContainer" class="flex column flex-center" v-if="SECTFStore.creatingRoom">
             <LoadingSpinner/>
             <div id="loadingMessage">Creating GameRoom on {{ethereumStore.networkName}}</div>
         </div>

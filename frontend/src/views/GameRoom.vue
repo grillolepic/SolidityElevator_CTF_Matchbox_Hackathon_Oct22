@@ -1,23 +1,32 @@
 <script setup>
     import { useSECTFStore } from '@/stores/sectf';
-    import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
-    import { ref, onMounted, onUnmounted, defineProps } from '@vue/runtime-core';
-    import LoadingSpinner from '@/components/LoadingSpinner.vue';
+    import { useRouter, useRoute } from 'vue-router';
+    import { ref, onMounted, watch, defineProps } from '@vue/runtime-core';
+    import { storeToRefs } from 'pinia';
     import { utils} from 'ethers';
+
+    import LoadingSpinner from '@/components/LoadingSpinner.vue';
 
     const props = defineProps(['roomId']);
     const SECTFStore = useSECTFStore();
-
+    const { currentRoomStatus } = storeToRefs(SECTFStore);
     const router = useRouter();
     const route = useRoute();
 
     const elevatorContract = ref('');
     
+    watch(currentRoomStatus, async (newValue, oldValue) => {
+        await afterReloadRoom();
+    });
+
     onMounted(async () => {
         console.log("GameRoom.vue onMounted()");
         SECTFStore.reset();
         await SECTFStore.loadRoom(props.roomId);
+        afterReloadRoom();
+    });
 
+    async function afterReloadRoom() {
         if (SECTFStore.currentRoomId == null) {
             return await router.push({ name: "Home" });
         } else if (SECTFStore.currentRoomJoined) {
@@ -25,7 +34,7 @@
                 return await router.push({ name: "Game", params: { roomId: SECTFStore.currentRoomId }});
             }
         }
-    });
+    }
 
     function isAddressValid() {
         if (elevatorContract.value.length == 42) {
