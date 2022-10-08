@@ -18,9 +18,9 @@
       <div id="loadingMessage" v-if="SECTFStore.closingRoom">Closing GameRoom</div>
   </div>
 
-  <div class="flex flex-center column" v-if="!(SECTFStore.loadingPreviousRooms || SECTFStore.closingRoom)">
+  <div id="buttonsConatinar" class="flex flex-center column" v-if="!(SECTFStore.loadingPreviousRooms || SECTFStore.closingRoom)">
     
-    <div id="logo" class="size-big w-700 noSelect">SolidityElevatorCTF</div>
+    <div id="logo" class="containNoRepeatCenter noSelect"></div>
 
     <div id="continueGames" class="flex flex-center row">
       <div id="continueGameItem" v-for="gameRoom in SECTFStore.activeGameRooms" :key="gameRoom.id">
@@ -43,6 +43,10 @@
 </template>
 
 <style scoped>
+  #buttonsConatinar {
+    margin-bottom: 150px;
+  }
+
   #continueGames {
     flex-wrap: wrap;
     width: 420px;
@@ -78,9 +82,10 @@
   }
 
   #logo {
-    color: var(--dark-blue) !important;
+    background-image: url(img/logoWithName.svg);
     margin-bottom: 20px;
-    font-size: 48px;
+    width: 300px;
+    height: 100px;
   }
 
   #contractAddress {

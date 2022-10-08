@@ -15,19 +15,21 @@
     <RouterView/>
   </div>
   <div v-else-if="ethereumStore.initialized" class="flex flex-center column">
-    <div id="logo" class="size-big w-700 noSelect">SolidityElevatorCTF</div>
+    <div id="logo" class="containNoRepeatCenter noSelect"></div>
     <ConnectButton/>
   </div>
 </template>
 
 <style scoped>
   #routerViewContainer {
-    height: calc(100vh - 80px);
+    height: calc(100vh - 100px);
   }
 
+
   #logo {
-    color: var(--dark-blue) !important;
+    background-image: url(img/logo.svg);
     margin-bottom: 20px;
-    font-size: 48px;
+    width: 300px;
+    height: 300px;
   }
 </style>

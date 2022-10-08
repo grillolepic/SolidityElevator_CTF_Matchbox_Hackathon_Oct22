@@ -8,7 +8,7 @@
 <template>
     <div class="flex row" id="Navbar">
         <router-link :to="{ name: 'Home' }">
-            <div id="logo" class="size-big size-title w-700 noSelect">SolidityElevatorCTF</div>
+            <div id="logo" class="noSelect"></div>
         </router-link>
         
         <ConnectButton v-if="type!='xs'"/>
@@ -16,9 +16,11 @@
 </template>
 
 <style scoped>
-    #logo {
-        color: var(--dark-blue) !important;
-    }
+  #logo {
+    background-image: url(img/logo.svg);
+    width: 40px;
+    height: 40px;
+  }
 
     #Navbar {
         position: static;
