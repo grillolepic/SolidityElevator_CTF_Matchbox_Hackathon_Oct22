@@ -33,11 +33,13 @@ let _resetState = {
     currentRoomPlayerNumber: null,
 
     gameInternalStatus: null,
+    gameLastBlockchainTurn: null,
     gameLastCheckpoint: null,
     gameTempCheckpoint: null,
-    readyForNextCheckpoint: false,
 
     gamePeers: {},
+    gamePeersTurnMode: [],
+    gamePeersOnline: [],
     gameBlockchainInteraction: false,
 
     playingTurnsOnChain: false,
@@ -360,62 +362,100 @@ export const useSECTFStore = defineStore({
             console.log(`SECTF: playTurnsOnChain(${turns})`);
             if (this.currentRoomId == null || this.currentRoomStatus != 2) { return null; }
 
-            if (this.readyForNextCheckpoint) {
-                //this.playingTurnsOnChain = true;
+            //this.playingTurnsOnChain = true;
 
-                try {
-                    let txReceipt = await _solidityElevatorCTFContract.play(this.currentRoomId, turns);
-                    await txReceipt.wait();
-                    
-                    await this.getCheckpointFromBlockchain();
+            try {
+                let txReceipt = await _solidityElevatorCTFContract.play(this.currentRoomId, turns);
+                await txReceipt.wait();
+                
+                await this.getCheckpointFromBlockchain();
 
-                    //this.playingTurnsOnChain = false;
-                    return true;
-                } catch (err) {
-                    this.playingTurnsOnChain = false;
-                    return null;
-                }
+                //this.playingTurnsOnChain = false;
+                return true;
+            } catch (err) {
+                this.playingTurnsOnChain = false;
+                return null;
             }
         },
 
         async getCheckpointFromBlockchain() {
             console.log(`SECTF: getCheckpointFromBlockchain()`);
-            if (this.currentRoomId == null || this.currentRoomStatus != 2) { return null; }
+            if (this.currentRoomId == null || this.currentRoomStatus < 2) { return null; }
 
-            let _gameState = await _solidityElevatorCTFContract.getGameState(this.currentRoomId);
+            try {
+                let _gameState = await _solidityElevatorCTFContract.getGameState(this.currentRoomId);
+                this.gameLastBlockchainTurn = _gameState[0].turn;
 
-            if (this.gameLastCheckpoint == null || this.gameLastCheckpoint.data.turn < _gameState[0].turn) {
+                if (this.gameLastCheckpoint == null || this.gameLastCheckpoint.data.turn < _gameState[0].turn) {
 
-                let _checkpointFromRemote = _gameStore.buildCheckpointFrom(_gameState);
-                let _checkpointHash = this.getCheckpointHash(_checkpointFromRemote);
-                let _hashedCheckpointSignature = await _offchainSigner.signMessage(utils.arrayify(_checkpointHash));
-                
-                let _signatures = [];
-                for (let i=0; i<this.currentRoom.numberOfPlayers; i++) {
-                    _signatures.push(null);
-                }
-
-                let _newTempCheckpoint = {
-                    data: _checkpointFromRemote,
-                    hash: _checkpointHash,
-                    signatures: _signatures
-                };
-                _newTempCheckpoint.signatures[this.currentRoomPlayerNumber] = _hashedCheckpointSignature;
-
-                if (this.currentRoom.numberOfPlayers > 1) {
-                    this.gameTempCheckpoint = _newTempCheckpoint;
-                    console.log("       - Created new Temp Checkpoint");
-
-                    if (this.gameInternalStatus >= 2) {
-                        _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
+                    let _checkpointFromRemote = _gameStore.buildCheckpointFrom(_gameState);
+                    let _checkpointHash = this.getCheckpointHash(_checkpointFromRemote);
+                    let _hashedCheckpointSignature = await _offchainSigner.signMessage(utils.arrayify(_checkpointHash));
+                    
+                    let _signatures = [];
+                    for (let i=0; i<this.currentRoom.numberOfPlayers; i++) {
+                        _signatures.push(null);
                     }
 
+                    let _newTempCheckpoint = {
+                        data: _checkpointFromRemote,
+                        hash: _checkpointHash,
+                        signatures: _signatures
+                    };
+                    _newTempCheckpoint.signatures[this.currentRoomPlayerNumber] = _hashedCheckpointSignature;
+
+                    if (this.currentRoom.numberOfPlayers > 1) {
+                        this.gameTempCheckpoint = _newTempCheckpoint;
+                        console.log("       - Created new Temp Checkpoint");
+                        if (this.gameInternalStatus == 2) {
+                            _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
+                        }
+                    } else {
+                        this.gameLastCheckpoint = _newTempCheckpoint;
+                        console.log("       - Created new Checkpoint");
+                    }
+                }
+            } catch (err) {
+                this.$patch({
+                    gameInternalStatus: -1,
+                    gameLastBlockchainTurn: null,
+                    gameLastCheckpoint: null,
+                    gameTempCheckpoint: null,
+                });
+                this.leave();
+            }
+        },
+
+        addTempCheckpointSignatures(signatures) {
+            console.log(`SECTF: addTempCheckpointSignatures()`);
+            let addedSignatures = 0;
+            let totalValidSignatures = 0;
+            for (let i=0; i<this.gameTempCheckpoint.signatures.length; i++) {
+                if (this.gameTempCheckpoint.signatures[i] == null) {
+                    if (signatures[i] != null) {
+                        this.gameTempCheckpoint.signatures[i] = signatures[i];
+                        addedSignatures++;
+                        totalValidSignatures++;
+                    }
                 } else {
-                    this.gameLastCheckpoint = _newTempCheckpoint;
-                    this.readyForNextCheckpoint = true;
-                    console.log("       - Created new Checkpoint");
+                    totalValidSignatures++;
                 }
             }
+
+            if (addedSignatures > 0) {
+                console.log(` - Added ${addedSignatures} signatures to temp checkpoint`);
+                _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
+
+                if (totalValidSignatures == this.currentRoom.numberOfPlayers) {
+                    let storedGameData = this.getLocalStorage();
+                    let _newGameLastCheckpoint = JSON.parse(JSON.stringify(this.gameTempCheckpoint));
+                    storedGameData.checkpoint = _newGameLastCheckpoint;
+                    localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
+                    this.$patch({
+                        gameLastCheckpoint: _newGameLastCheckpoint,
+                        gameTempCheckpoint: null
+                    });
+            }}
         },
 
         getCheckpointHash(data) {
@@ -470,7 +510,6 @@ export const useSECTFStore = defineStore({
             
             //01. Load the stored data. If private key data is not found, exit.
             let storedCheckpoint = null;
-
             let storedGameData = this.getLocalStorage();
 
             if (storedGameData != null) {
@@ -492,7 +531,6 @@ export const useSECTFStore = defineStore({
                     }
 
                     this.gameLastCheckpoint = storedCheckpoint;
-                    this.readyForNextCheckpoint = true;
                     console.log(" - Found valid checkpoint.");
 
                 } catch (err) {
@@ -503,43 +541,68 @@ export const useSECTFStore = defineStore({
                 }
             }
 
-            //03. Now check if th blockchain state is not further into the game (> turn)            
+            //03. Now check if th blockchain state is not further into the game            
             await this.getCheckpointFromBlockchain();
 
             //04. Connect with other player via WebRTC and exchange signed ids before beginning sync
             if (this.currentRoom.numberOfPlayers > 1) {
-                
-                this.gameInternalStatus = 1;
-                
-                _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
+                if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
 
-                [_sendMessage, _getMessage] = _trysteroRoom.makeAction('message');
-                _getMessage((data, peer) => this.getMessage(data, peer));
-
-                _trysteroRoom.onPeerJoin(async () => {
-                    if (this.gameInternalStatus == 1) {
-                        let ts = Date.now();                    
-                        let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [_ethereumStore.address, ts]);
-                        let signedTimestampAddress = await _offchainSigner.signMessage(utils.arrayify(hashedTimestampAddress));
-                        _sendMessage({ type: "id", data: { address: _ethereumStore.address, timestamp: ts, signature: signedTimestampAddress }});
+                    this.gameInternalStatus = 1;
+                    let peersTurnMode = [];
+                    let peersOnline = [];
+                    for (let i=0; i<this.currentRoom.numberOfPlayers; i++) {
+                        peersTurnMode.push(0);
+                        peersOnline.push(i == this.currentRoomPlayerNumber);
                     }
-                });
+                    
+                    _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
 
-                _trysteroRoom.onPeerLeave((peerId) => {
-                    if (peerId in this.gamePeers) {
-                        console.log(` > Player #${this.gamePeers[peerId].playerNumber} (${this.gamePeers[peerId].address}) left the game`);
-                        let newPeers = {...this.gamePeers };
-                        delete newPeers[peerId];
-                        this.gamePeers = { ...newPeers };
-                        this.updatePlayers();
-                    }
-                });
-            } else {
-                if (this.readyForNextCheckpoint) {
-                    this.gameInternalStatus = 3;
+                    [_sendMessage, _getMessage] = _trysteroRoom.makeAction('message');
+                    _getMessage((data, peer) => this.getMessage(data, peer));
+
+                    _trysteroRoom.onPeerJoin(async () => {
+                        if (this.gameInternalStatus == 1) {
+                            let ts = Date.now();                    
+                            let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [_ethereumStore.address, ts]);
+                            let signedTimestampAddress = await _offchainSigner.signMessage(utils.arrayify(hashedTimestampAddress));
+                            _sendMessage({ type: "id", data: { address: _ethereumStore.address, timestamp: ts, signature: signedTimestampAddress }});
+                        }
+                    });
+
+                    _trysteroRoom.onPeerLeave((peerId) => {
+                        if (peerId in this.gamePeers) {
+                            console.log(` > Player #${this.gamePeers[peerId].playerNumber} (${this.gamePeers[peerId].address}) left the game`);
+
+                            let playerLeft = this.gamePeers[peerId].playerNumber;
+                            let newTurnMode = [...this.gamePeersTurnMode];
+                            let newOnline = [...this.gamePeersOnline];
+                            let newPeers = {...this.gamePeers };
+
+                            newTurnMode[playerLeft] = 0;
+                            newOnline[playerLeft] = false;
+                            delete newPeers[peerId];
+
+                            this.$patch({
+                                gamePeersTurnMode: newTurnMode,
+                                gamePeersOnline: newOnline,
+                                gamePeers: { ...newPeers }
+                            });
+
+                            this.updatePlayers();
+                        }
+                    });
                 } else {
-                    this.gameInternalStatus = -3;
+                    this.gameInternalStatus = -1;
+                    this.leave();
                 }
+            } else {
+                this.gamePeersTurnMode = [0];
+                this.$patch({
+                    gamePeersTurnMode: [0],
+                    gamePeersOnline: [true],
+                    gameInternalStatus: this.readyForNextCheckpoint?2:-2
+                });
             }
         },
 
@@ -568,18 +631,13 @@ export const useSECTFStore = defineStore({
                 } catch(err) {
                     console.log(err);
                 }
+
             } else if (this.gameInternalStatus > 1 && message.type == "sync_checkpoint") {
                 try {
-
-                    if (Object.keys(this.gamePeers).length == this.currentRoom.numberOfPlayers) {
-                        this.gameInternalStatus = (this.readyForNextCheckpoint)?3:2;
-                    } else {
-                        this.gameInternalStatus = 2;
-                    }
-
-                    if (this.gameTempCheckpoint == null) {
-                        console.log("NO LOCAL TEMP CHECKPOINT");
-                        return this.getCheckpointFromBlockchain();
+                    if (this.gameTempCheckpoint == null && this.gameLastCheckpoint == null) {
+                        console.log("NO CHECKPOINTS!");
+                        this.gameInternalStatus = -1;
+                        return this.leave();
                     }
 
                     //01. First, check if the hash is accurate
@@ -614,7 +672,7 @@ export const useSECTFStore = defineStore({
 
                     console.log(`Player ${otherPlayerNumber} provided a correct hash for turn ${checkpointData.turn} with ${validSignatures.length} valid signatures`);
 
-                    // 0. NORMAL FUNCTIONING
+                    // I. PARTIALLY SIGNED CHECKPOINT > LAST CHECKPOINT (BY EXACTLY 1) ** NORMAL BEHAVIOUR ** 
                     //   - Players start with no full checkpoint, only temp checkpoint with their own signature
                     //   - They send each other their temp checkpoint until they all have all signatures
                     //   - Once fully signed, the temp checkpoint is saved on local storage and 'readyForNextCheckpoint' is set to true
@@ -622,108 +680,79 @@ export const useSECTFStore = defineStore({
                     //   - They send it partially signed and the whole process repeats
 
                     // Conflicts and Resolutions:
-                    //   I. FULLY SIGNED, NEWER CHECKPOINT
-                    //      - If newer (> tempCheckpoint), this checkpoint is saved to storage and 'readyForNextCheckpoint' is set to true
-                    //      - This could happen as a result of lost storage.
-                    //   II. PARTIALLY SIGNED CHECKPOINT > TEMP CHECKPOINT
+                    //   II. PARTIALLY SIGNED CHECKPOINT > TEMP CHECKPOINT (BY MORE THAN 1)
                     //       - The blockchain state might have been updated, check the blockchain first
-                    //       - A. If blockchain's turn >= the received turn, sign a new temp state and send it
-                    //       - B. If blockchain's turn < the received turn, request a full state from other players with `sync_checkpoint_full_request`
+                    //       - A. If blockchain's turn == the received turn, check hash, sign and send it back
+                    //       - B. If blockchain's turn > the receive turn, send the signed newer one
+                    //       - C. If blockchain's turn < the received turn, request a full state from other players with `sync_checkpoint_full_request`
                     //            - Other players receive this message and send their last full checkpoint
                     //   III. PARTIALLY SIGNED CHECKPOINT < TEMP CHECKPOINT
                     //       - Some player is behind. Send them the last fully signed checkpoint
+                    //   IV. FULLY SIGNED, NEWER CHECKPOINT
+                    //      - If newer (> tempCheckpoint && >lastCheckpoint), this checkpoint is saved to storage and 'readyForNextCheckpoint' is set to true
+                    //      - This could happen as a result of lost storage.
 
-                    //0. NORMAL FUNCTIONING
-                    if (checkpointData.turn == this.gameTempCheckpoint.data.turn) {
-                        if (checkpointHash == this.gameTempCheckpoint.hash) {
+                    if (validSignatures.length < this.currentRoom.numberOfPlayers) {
 
-                            let addedSignatures = 0;
-                            let totalValidSignatures = 0;
-                            for (let i=0; i<this.gameTempCheckpoint.signatures.length; i++) {
-                                if (this.gameTempCheckpoint.signatures[i] == null) {
-                                    if (message.data.signatures[i] != null) {
-                                        this.gameTempCheckpoint.signatures[i] = message.data.signatures[i];
-                                        addedSignatures++;
-                                        totalValidSignatures++;
+                        //I. PARTIALLY SIGNED CHECKPOINT == TEMP CHECKPOINT OR EXATLY +1 FROM LAST CHECKPOINT
+                        if ((this.gameTempCheckpoint != null && checkpointData.turn == this.gameTempCheckpoint.data.turn) ||
+                            (this.gameTempCheckpoint == null && checkpointData.turn == (this.gameLastCheckpoint.data.turn + 1))) {
+
+                            if (this.gameTempCheckpoint == null) {
+                                //TODO: Create new checkpoint off-chain, querying the elevators view function
+                                return;
+                            }
+
+                            if (checkpointHash == this.gameTempCheckpoint.hash) {
+                                this.addTempCheckpointSignatures(message.data.signatures);
+                            }
+
+                        //II. PARTIALLY SIGNED CHECKPOINT > TEMP CHECKPOINT (BY MORE THAN 1)
+                        } else if ((this.gameTempCheckpoint != null && checkpointData.turn > this.gameTempCheckpoint.data.turn) ||
+                                   (this.gameTempCheckpoint == null && checkpointData.turn > this.gameLastCheckpoint.data.turn)) {
+
+                            await this.getCheckpointFromBlockchain();
+
+                            if (this.gameTempCheckpoint != null) {
+                                if (checkpointData.turn == this.gameTempCheckpoint.data.turn) {
+                                    if (checkpointHash == this.gameTempCheckpoint.hash) {
+                                        this.addTempCheckpointSignatures(message.data.signatures);
                                     }
-                                } else {
-                                    totalValidSignatures++;
+                                } else if (checkpointData.turn < this.gameTempCheckpoint.data.turn) {
+                                    _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
                                 }
-                            }
-
-                            if (addedSignatures > 0) {
-                                console.log(` - Added ${addedSignatures} signatures to temp checkpoint`);
-                                _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
-
-                                if (totalValidSignatures == this.currentRoom.numberOfPlayers) {
-                                    let storedGameData = this.getLocalStorage();
-                                    let _newGameLastCheckpoint = JSON.parse(JSON.stringify(this.gameTempCheckpoint));
-                                    storedGameData.checkpoint = _newGameLastCheckpoint;
-                                    localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
-                                    this.$patch({
-                                        gameLastCheckpoint: _newGameLastCheckpoint,
-                                        gameTempCheckpoint: null,
-                                        readyForNextCheckpoint: true
-                                    });
-                                }
-                            }
-                        }
-                    } else if (checkpointData.turn > this.gameTempCheckpoint.data.turn) {
-
-                        if (validSignatures.length == this.currentRoom.numberOfPlayers) {
-                            //I. FULLY SIGNED, NEWER CHECKPOINT
-                            let storedGameData = this.getLocalStorage();
-                            let _newGameLastCheckpoint = JSON.parse(JSON.stringify(this.gameTempCheckpoint));
-                            storedGameData.checkpoint = _newGameLastCheckpoint;
-                            localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
-                            this.$patch({
-                                gameLastCheckpoint: _newGameLastCheckpoint,
-                                gameTempCheckpoint: null,
-                                readyForNextCheckpoint: true
-                            });
-                        } else {
-                            //II. PARTIALLY SIGNED CHECKPOINT > TEMP CHECKPOINT
-                            let _gameState = await _solidityElevatorCTFContract.getGameState(this.currentRoomId);
-
-                            //A.
-                            if (_gameState[0].turn >= checkpointData.turn) {
-                
-                                let _checkpointFromRemote = _gameStore.buildCheckpointFrom(_gameState);
-                                let _checkpointHash = this.getCheckpointHash(_checkpointFromRemote);
-                                let _hashedCheckpointSignature = await _offchainSigner.signMessage(utils.arrayify(_checkpointHash));
-                                
-                                let _signatures = [];
-                                for (let i=0; i<this.currentRoom.numberOfPlayers; i++) {
-                                    _signatures.push(null);
-                                }
-                
-                                _newTempCheckpoint = {
-                                    data: _checkpointFromRemote,
-                                    hash: _checkpointHash,
-                                    signatures: _signatures
-                                };
-                                _newTempCheckpoint.signatures[this.currentRoomPlayerNumber] = _hashedCheckpointSignature;
-                                this.gameTempCheckpoint = _newTempCheckpoint;
-
-                                _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint });
-                                
-                                console.log("       - Created new Temp Checkpoint from Blockchain state");
                             } else {
-                                //B.
                                 _sendMessage({type: "sync_checkpoint_full_request", data: null});
                             }
-                        }
-                    } else {
+
                         //III. PARTIALLY SIGNED CHECKPOINT < TEMP CHECKPOINT
-                        if (this.gameLastCheckpoint != null) {
-                            _sendMessage({type: "sync_checkpoint", data: this.gameLastCheckpoint});
+                        } else if ((this.gameTempCheckpoint != null && checkpointData.turn < this.gameTempCheckpoint.data.turn) ||
+                            (this.gameTempCheckpoint == null && checkpointData.turn < this.gameLastCheckpoint.data.turn)) {
+
+                                if (this.gameLastCheckpoint != null) {
+                                    _sendMessage({type: "sync_checkpoint", data: this.gameLastCheckpoint});
+                                }
                         }
+
+                    //IV. FULLY SIGNED, NEWER CHECKPOINT
+                    } else if ((validSignatures.length == this.currentRoom.numberOfPlayers) && (
+                               (this.gameTempCheckpoint != null && checkpointData.turn > this.gameTempCheckpoint.data.turn) ||
+                               (this.gameTempCheckpoint == null && checkpointData.turn > this.gameLastCheckpoint.data.turn))) {
+
+                        let storedGameData = this.getLocalStorage();
+                        let _newGameLastCheckpoint = JSON.parse(JSON.stringify(this.gameTempCheckpoint));
+                        storedGameData.checkpoint = _newGameLastCheckpoint;
+                        localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
+                        this.$patch({
+                            gameLastCheckpoint: _newGameLastCheckpoint,
+                            gameTempCheckpoint: null
+                        });
                     }
+
                 } catch (err) {
                     console.log(err);
-                    this.gameLastCheckpoint = null;
-                    this.gameTempCheckpoint = null;
-                    this.gameStatus = -3;
+                    this.gameInternalStatus = -1;
+                    this.leave();
                 }
 
             } else if (message.type == "sync_checkpoint_full_request") {
@@ -744,7 +773,12 @@ export const useSECTFStore = defineStore({
                     _sendMessage({type: "sync_checkpoint", data: (this.gameTempCheckpoint == null)?this.gameLastCheckpoint:this.gameTempCheckpoint});
                 }, 1000);
             } else {
-                this.gameInternalStatus = 1;
+                if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
+                    this.gameInternalStatus = 1;
+                } else {
+                    this.gameInternalStatus = -1;
+                    this.leave();
+                }
             }
         },
 
@@ -762,7 +796,7 @@ export const useSECTFStore = defineStore({
             if (_trysteroRoom != null) {
                 _trysteroRoom.leave();
                 _trysteroRoom = null;
-                this.$patch({ ..._resetState });
+                //this.$patch({ ..._resetState });
             }
             _offchainSigner = null;
             _sendMessage = null;
