@@ -7,8 +7,6 @@ export default function () {
   const onWidthChange = () => {
     windowWidth.value = window.innerWidth;
     windowHeight.value = window.innerHeight;
-
-    console.log(windowHeight.value);
   }
 
   onMounted(() => window.addEventListener('resize', onWidthChange))

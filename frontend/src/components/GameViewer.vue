@@ -136,7 +136,7 @@
                             <div :style="lightStyle()" class="elevatorLight" :class="{'green': SECTFStore.gameLastCheckpoint.data.elevators[p-1].light == 1}">▲</div>
                         </div>
                         <TransitionGroup :style="passengerContainerStyle()" tag="div" name="passengers-animation" class="elevatorPassengerContainer flex row" >
-                            <div class="passenger flex flex-center" :style="passengerInElevatorStyle()" v-for="passenger in SECTFStore.gameLastCheckpoint.data.elevators[p-1].passengers" :key="passenger">{{passenger+1}}</div>
+                            <div class="passenger flex flex-center" :style="passengerInElevatorStyle()" v-for="pngr in SECTFStore.gameLastCheckpoint.data.elevators[p-1].passengers.length" :key="pngr">{{SECTFStore.gameLastCheckpoint.data.elevators[p-1].passengers[pngr-1]+1}}</div>
                         </TransitionGroup>
                         <div :style="doorsContainerStyle()" class="elevatorDoorsContainer" style="z-index:4">
                             <div :style="doorStyle()" class="door" style="left:0px;" :class="{'openDoors': [3,5].includes(SECTFStore.gameLastCheckpoint.data.elevators[p-1].status) }"></div>

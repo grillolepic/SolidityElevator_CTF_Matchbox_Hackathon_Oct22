@@ -36,7 +36,7 @@
             <GameViewer />
         </div>
         <div class="flex row flex-center">
-            <div class="button" @click="playOnChain(10)">Play On Chain</div>
+            <div class="button" @click="playOnChain(50)">Play On Chain</div>
         </div>
     </div>
     <div class="flex column flex-center" v-else>
