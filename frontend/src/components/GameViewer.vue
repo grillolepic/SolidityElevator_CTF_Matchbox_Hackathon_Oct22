@@ -53,7 +53,7 @@
     function elevatorWidth() { return `width: ${floorHeight()}px;`; }
 
     function lightContainerHeight() { return `height: ${floorHeight() * 0.2}px;)`; }
-    function lightStyle() { return `font-size: ${floorHeight() * 0.18}px; width: ${floorHeight() /4}px;`; }
+    function lightStyle() { return `font-size: ${floorHeight() * 0.18}px; width: ${floorHeight() / 5}px;`; }
     function passengerContainerStyle() { return `width: ${floorHeight()}px; height: ${floorHeight() * 0.8}px;`; }
     function doorsContainerStyle() { return `width: ${floorHeight()}px; height: ${floorHeight() * 0.8}px;`; }
     function doorStyle() { return `width: ${floorHeight() / 2}px; height: ${floorHeight() * 0.8}px;`; }
@@ -132,8 +132,8 @@
                 <div class="flex column elevatorsColumn" v-for="p in SECTFStore.currentRoom.numberOfPlayers" :key="p">
                     <div :style="elevatorStyle(p)" class="elevator" >
                         <div :style="lightContainerHeight()" class="elevatorLightContainer flex row flex-center" >
-                            <div :style="lightStyle()" class="elevatorLight" :class="{'red': SECTFStore.gameLastCheckpoint.data.elevators[p-1].light == 2}">▼</div>
                             <div :style="lightStyle()" class="elevatorLight" :class="{'green': SECTFStore.gameLastCheckpoint.data.elevators[p-1].light == 1}">▲</div>
+                            <div :style="lightStyle()" class="elevatorLight" :class="{'red': SECTFStore.gameLastCheckpoint.data.elevators[p-1].light == 2}">▼</div>
                         </div>
                         <TransitionGroup :style="passengerContainerStyle()" tag="div" name="passengers-animation" class="elevatorPassengerContainer flex row" >
                             <div class="passenger flex flex-center" :style="passengerInElevatorStyle()" v-for="pngr in SECTFStore.gameLastCheckpoint.data.elevators[p-1].passengers.length" :key="pngr">{{SECTFStore.gameLastCheckpoint.data.elevators[p-1].passengers[pngr-1]+1}}</div>
