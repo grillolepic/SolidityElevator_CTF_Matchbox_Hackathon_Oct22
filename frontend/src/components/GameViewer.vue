@@ -30,7 +30,7 @@
         let gameHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--game-height'));
         let floorsProportional = SECTFStore.currentRoom.floors * 3;
         let total = floorsProportional + 4;
-        let proportionDivision = 3/total;
+        let proportionDivision = 3 / total;
         return gameHeight * proportionDivision;
     }
 
@@ -39,12 +39,14 @@
     }
 
     function infoRowHeightStyle() { return `height: ${floorHeight() * (2/3)}px;`; }
+    
     function floorHeightStyle() { return `height: ${floorHeight()}px;`; }
     function allFloorsHeightStyle() { return `height: ${floorHeight() * SECTFStore.currentRoom.floors}px;`; }
 
     function floorNumberSectionStyle() { return `font-size: ${floorHeight() * 1.1}px; line-height: ${floorHeight() * 1.1}px; width: ${gameWidth()/10}px;`; }
     function passengersSectionStyle() { return `width:${gameWidth() * (9/10) / 3}px;`; }
     function elevatorSectionStyle() { return `width:${gameWidth() * (9/10) * (2/3)}px;`; }
+    function floorAndPassengersSectionStyle() { return `width: ${gameWidth()/10 + (gameWidth() * (9/10) / 3)}px;` }
 
     function passengerInElevatorStyle() {
         return `width: ${floorHeight() / 3.5}px; height: ${floorHeight() / 3.5}px; font-size: ${floorHeight() / 4}px; margin: ${floorHeight() / 30}px;`;
@@ -89,20 +91,37 @@
     <!-- LAYER: TOP AND BOTTOM INFO LABELS-->
     <div class="floorsContainer limitWidth flex column flex-center" style="z-index: 0">
         <div :style="infoRowHeightStyle()" class="flex row flex-center" style="align-items: flex-end;">
-            <div :style="floorNumberSectionStyle()"></div>
-            <div :style="passengersSectionStyle()"></div>
+            <div :style="floorAndPassengersSectionStyle()"> </div>
             <div :style="elevatorSectionStyle()" class="elevatorsAddressRow flex row flex-center">
                 <div class="elevatorsAddressColumn flex column flex-center" v-for="p in SECTFStore.currentRoom.numberOfPlayers" :key="p">
-                    <id class="displayElevatorNumber"><span class="onlineIndicator" :class="{'red':!SECTFStore.gamePeersOnline[p-1], 'green':SECTFStore.gamePeersOnline[p-1]}">●</span> Elevator {{p}}</id>
+                    <div id class="flex row flex-center">
+                        <div class="onlineIndicator" :class="{'red':!SECTFStore.gamePeersOnline[p-1], 'green':SECTFStore.gamePeersOnline[p-1]}"></div>
+                        <div class="displayElevatorNumber">Elevator {{p}}</div>
+                        <div class="playPauseIndicator containNoRepeatCenter" :class="{ 'play': SECTFStore.gamePeersTurnMode[p-1] == 1, 'pause': SECTFStore.gamePeersTurnMode[p-1] == 0 }"></div>
+                    </div>
                     <id class="displayAddress">{{shortAddress(SECTFStore.currentRoom.players[p-1], 20)}}</id>
                 </div>
             </div>
         </div>
         <div :style="allFloorsHeightStyle()"></div>
         <div :style="infoRowHeightStyle()" class="flex row flex-center" style="flex:2">
-            <div class="flex column flex-center">
-                <div class="turnLabel">TURN</div>
-                <div class="turnNumber">{{SECTFStore.gameLastCheckpoint.data.turn}}</div>
+            <div :style="floorAndPassengersSectionStyle()" class="flex column">
+                <id class="turnNumber">TURN {{SECTFStore.gameLastCheckpoint.data.turn}}</id>
+                <id class="blockchainTurnInfo">Last Blockchain Turn: {{SECTFStore.gameLastBlockchainTurn}}</id>
+            </div>
+            <div :style="elevatorSectionStyle()" class="elevatorsAddressRow flex row flex-center">
+                <div class="elevatorsAddressColumn flex column flex-center" v-for="p in SECTFStore.currentRoom.numberOfPlayers" :key="p">
+                    <div class="flex row flex-center">
+                        <div class="scoreIcon containNoRepeatCenter"></div>
+                        <id class="elevatorScore">{{SECTFStore.gameLastCheckpoint.data.elevators[p-1].score}}</id>
+                    </div>
+                    <div class="flex row flex-center">
+                        <div class="balanceIcon containNoRepeatCenter"></div>
+                        <id class="elevatorInfoDataLabel">{{SECTFStore.gameLastCheckpoint.data.elevators[p-1].balance}}</id>
+                        <div class="speedIcon containNoRepeatCenter"></div>
+                        <id class="elevatorInfoDataLabel">{{SECTFStore.gameLastCheckpoint.data.elevators[p-1].speed}}</id>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -189,24 +208,22 @@
         transition-duration: 1s;
     }
 
-    .turnLabel {
-        font-size: 12px;
-        line-height: 10px;
-    }
-
     .turnNumber {
-        font-size: 32px;
-        line-height: 32px;
+        font-size: 24px;
+        line-height: 28px;
         font-weight: 700;
+    }
+    .blockchainTurnInfo {
+        font-size: 10px;
+        color: var(--dark-grey);
     }
 
     .onlineIndicator {
-        position: relative;
-        bottom: 1px;
-    }
-
-
-
+        border-radius: 100px;
+        width: 8px;
+        height: 8px;
+        margin-right: 4px;
+   }
 
     .displayElevatorNumber {
         font-size: 18px;
@@ -220,20 +237,22 @@
         margin-bottom: 10px;
     }
 
+    .playPauseIndicator {
+        width: 12px;
+        height: 12px;
+        margin-left: 5px;
+        position: relative;
+        top: 0.5px;
+        opacity: 0.5;
+    }
 
+    .play { background-image: url(img/play.svg);}
+    .pause { background-image: url(img/pause.svg);}
 
     .strech {
         align-items: stretch;
         align-content: stretch;
     }
-
-
-
-    
-
-
-
-
 
     .elevatorLightContainer {
         color: white;
@@ -253,8 +272,6 @@
         width: 100%;
         bottom: 0px;
     }
-
-
 
     .elevatorDoorsContainer {
         position: absolute;
@@ -287,8 +304,47 @@
     }
 
 
-    .red { color: var(--red); }
-    .green { color: var(--green); }
+    .elevatorScore {
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 26px;
+    }
+
+    .elevatorInfoDataLabel {
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--dark-grey);
+    }
+    .speedIcon {
+        width: 20px; height: 20px;
+        margin-left: 10px;
+        background-image: url('img/speed.svg');
+    }
+    .balanceIcon {
+        width: 20px; height: 20px;
+        background-image: url('img/balance.svg');
+    }
+    .scoreIcon {
+        width: 15px; height: 15px;
+        margin-right: 5px;
+        background-image: url('img/score.svg');
+    }
+
+
+    .red { background-color: var(--red); }
+    .green {
+        background-color: #53fd5b;
+        animation: glow 1s infinite alternate;
+    }
+
+    @keyframes glow {
+    from {
+        box-shadow: 0 0 2px -2px #53fd5bb6;
+    }
+    to {
+        box-shadow: 0 0 2px 2px #53fd5bb6;
+    }
+    }
 
     .bg-0 { background-color: var(--gradient-0); }
     .bg-1 { background-color: var(--gradient-1); }

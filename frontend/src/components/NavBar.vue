@@ -18,8 +18,8 @@
 <style scoped>
   #logo {
     background-image: url(img/logo.svg);
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
   }
 
     #Navbar {
