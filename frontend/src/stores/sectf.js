@@ -61,6 +61,13 @@ export const useSECTFStore = defineStore({
     state: () => ({ ..._initialState }),
     
     getters: {
+        automaticPlaying: (state) => {
+            if (state.currentRoom == null) { return false;}
+            if (state.currentRoomPlayerNumber == null) { return false; }
+            if (state.currentRoomStatus != 2) { return false; }
+            if (state.gamePeersTurnMode.length < state.currentRoom.numberOfPlayers) { return false; }
+            return (state.gamePeersTurnMode[state.currentRoomPlayerNumber] == 1);
+        },
         localKeyGameRoom: (state) => (state.currentRoomId == null)?null:utils.solidityKeccak256(['uint160','uint160','uint256'], [state.contractAddress, _ethereumStore.address, state.currentRoomId]),
         localKeySimple: (state) => utils.solidityKeccak256(['uint160','uint160'], [state.contractAddress, _ethereumStore.address])
     },

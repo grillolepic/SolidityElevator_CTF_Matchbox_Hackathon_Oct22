@@ -19,6 +19,10 @@
   --red: #ae4d4d;
   --green: #4dae52;
 
+  --play: #caee93;
+  --play-hover:rgb(161, 196, 108);
+
+
   --dark-red: #772727;
 
   --color-background: var(--white-mute);

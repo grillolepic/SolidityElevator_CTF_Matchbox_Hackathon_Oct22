@@ -131,3 +131,6 @@ a:visited {
 .w-200 {
   font-weight: 200;
 }
+
+.limitWidth { max-width: var(--game-width); }
+  

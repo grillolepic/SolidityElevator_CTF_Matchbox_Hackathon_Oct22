@@ -1,6 +1,5 @@
 <script setup>
     import { useSECTFStore } from '@/stores/sectf';
-    import { useGameStore } from '@/stores/game';
     import { useRouter, onBeforeRouteLeave } from 'vue-router';
     import { ref, onMounted, onUnmounted, defineProps } from '@vue/runtime-core';
     import LoadingSpinner from '@/components/LoadingSpinner.vue';
@@ -14,21 +13,17 @@
         dialog.value = b;
     }
 
-
     const SECTFStore = useSECTFStore();
-    const gameStore = useGameStore();
     const router = useRouter();
     
     onMounted(async () => {
       console.log("Game.vue onMounted()");
-      SECTFStore.startGame();
-      
+      SECTFStore.startGame();      
       if (SECTFStore.gameInternalStatus == -1) {
         console.log("Leaving Game with status: -1");
         return await router.push({ name: "Home" });
       }
     });
-
 
     function changeTurnsToPlayOnChain(n) {
         if (canPushState()) { return; }
@@ -90,6 +85,7 @@
             <GameViewer />
         </div>
     </div>
+
     <div class="flex column flex-center" v-else>
         <div class="flex column flex-center" v-if="(SECTFStore.gameInternalStatus >= 0 && SECTFStore.gameInternalStatus < 3) || SECTFStore.gameBlockchainInteraction">
             <LoadingSpinner />
@@ -144,7 +140,6 @@
         width: 40px;
         height: 40px;
         background-color: var(--grey);
-        border-radius: 20px;
         cursor: pointer;
         background-image: url(img/chain.svg);
         z-index: 400;
@@ -195,12 +190,10 @@
     .disabledButton { background-color: var(--grey) !important; cursor: unset; }
     .disabledButton:hover { background-color: var(--grey) !important; color: var(--white) !important;}
 
-
-
-
     #gameOverContainer {
         margin-top: 40px;
         height: 100%;
+        align-items: center;
     }
 
     #loadingMessage {

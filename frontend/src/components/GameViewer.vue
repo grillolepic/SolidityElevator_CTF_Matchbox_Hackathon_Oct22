@@ -61,6 +61,10 @@
     function doorStyle() { return `width: ${floorHeight() / 2}px; height: ${floorHeight() * 0.8}px;`; }
 
 
+    function turnButtonClick() {
+        console.log("@!!!!");
+    }
+
 </script>
 
 <template>
@@ -89,7 +93,7 @@
     </div>
 
     <!-- LAYER: TOP AND BOTTOM INFO LABELS-->
-    <div class="floorsContainer limitWidth flex column flex-center" style="z-index: 0">
+    <div class="floorsContainer limitWidth flex column flex-center" style="z-index: 10">
         <div :style="infoRowHeightStyle()" class="flex row flex-center" style="align-items: flex-end;">
             <div :style="floorAndPassengersSectionStyle()"> </div>
             <div :style="elevatorSectionStyle()" class="elevatorsAddressRow flex row flex-center">
@@ -104,10 +108,16 @@
             </div>
         </div>
         <div :style="allFloorsHeightStyle()"></div>
-        <div :style="infoRowHeightStyle()" class="flex row flex-center" style="flex:2">
-            <div :style="floorAndPassengersSectionStyle()" class="flex column">
-                <id class="turnNumber">TURN {{SECTFStore.gameLastCheckpoint.data.turn}}</id>
-                <id class="blockchainTurnInfo">Last Blockchain Turn: {{SECTFStore.gameLastBlockchainTurn}}</id>
+        <div :style="infoRowHeightStyle()" class="flex row flex-center">
+            <div :style="floorAndPassengersSectionStyle()" class="flex row">
+
+                <div id="playPauseButton" class="containNoRepeatCenter" @click="turnButtonClick()"
+                    :class="{ 'playing': SECTFStore.automaticPlaying, 'notPlaying': !SECTFStore.automaticPlaying, 'disabled': (SECTFStore.currentRoomStatus != 2 || SECTFStore.gameBlockchainInteraction)}"></div>
+
+                <div class="flex column">
+                    <id class="turnNumber">TURN {{SECTFStore.gameLastCheckpoint.data.turn}}</id>
+                    <id class="blockchainTurnInfo">Last Blockchain Turn: {{SECTFStore.gameLastBlockchainTurn}}</id>
+                </div>
             </div>
             <div :style="elevatorSectionStyle()" class="elevatorsAddressRow flex row flex-center">
                 <div class="elevatorsAddressColumn flex column flex-center" v-for="p in SECTFStore.currentRoom.numberOfPlayers" :key="p">
@@ -182,8 +192,6 @@
         justify-content: start;
     }
 
-    .limitWidth { max-width: var(--game-width); }
-
     .floor { width: 100%; }
 
     .floorNumber {
@@ -212,6 +220,7 @@
         font-size: 24px;
         line-height: 28px;
         font-weight: 700;
+        margin-top: 7px;
     }
     .blockchainTurnInfo {
         font-size: 10px;
@@ -330,7 +339,6 @@
         background-image: url('img/score.svg');
     }
 
-
     .red { background-color: var(--red); }
     .green {
         background-color: #53fd5b;
@@ -371,4 +379,42 @@
     .passengers-animation-leave-active {
     position: absolute;
     }
+
+
+
+    #playPauseButton {
+        width: 40px;
+        height: 40px;
+        margin: 10px 10px 0px 0px;
+        cursor: pointer;
+    }
+
+    .playing {
+        background-image: url(img/pause_solo.svg);
+        background-color: var(--red);
+    }
+
+    .playing:hover{
+        background-color: var(--dark-red);
+    }
+
+    .notPlaying {
+        background-image: url(img/play_solo.svg);
+        background-color: var(--play);
+    }
+
+    .notPlaying:hover{
+        background-color: var(--play-hover);
+    }
+
+    .disabled {
+        background-image: url(img/play_solo.svg);
+        background-color: var(--dark-grey) !important;
+        cursor: unset;
+    }
+    .disabled:hover {
+        background-color: var(--dark-grey)
+        !important; cursor: unset;
+    }
+
 </style>
