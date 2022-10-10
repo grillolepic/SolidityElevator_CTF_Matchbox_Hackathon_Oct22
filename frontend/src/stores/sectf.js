@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { useEthereumStore } from './ethereum';
-import { useGameStore } from './game';
+import { SolidityElevatorGame } from '../helpers/game';
 import { solidityElevatorContractAddress } from '@/helpers/blockchainConstants';
 import { Contract, Wallet, utils} from 'ethers';
 import { joinRoom } from 'trystero';
@@ -8,7 +8,6 @@ import { joinRoom } from 'trystero';
 import SOLIDITY_ELEVATOR_CTF_ABI from './abi/solidityElevatorCTF.json';
 
 let _ethereumStore = null;
-let _gameStore = null;
 
 let _solidityElevatorCTFContract = null;
 
@@ -55,6 +54,9 @@ let _trysteroRoom = null;
 let _sendMessage = null;
 let _getMessage = null;
 
+const AUTOMATIC_INTERVAL_TIME = 5000;
+let _turnLoop = null;
+
 export const useSECTFStore = defineStore({
     id: 'SECTF',
 
@@ -77,7 +79,6 @@ export const useSECTFStore = defineStore({
             console.log("SECTF: init()");
 
             _ethereumStore = useEthereumStore();
-            _gameStore = useGameStore();
 
             this.contractAddress = solidityElevatorContractAddress[_ethereumStore.chainId];
             _solidityElevatorCTFContract = new Contract(this.contractAddress, SOLIDITY_ELEVATOR_CTF_ABI, _ethereumStore.ethersSigner);
@@ -392,6 +393,33 @@ export const useSECTFStore = defineStore({
             }
         },
 
+        async automaticLoop() {
+            if (this.currentRoomId == null || this.currentRoomStatus != 2) { 
+                clearInterval(_turnLoop);
+                return null;    
+            }
+            if (this.automaticPlaying) {
+                console.log(`SECTF: automaticLoop()`);
+                if (this.gameTempCheckpoint == null && this.gameLastCheckpoint != null) {
+                    console.log(" - Ready to create checkpoint");
+                    try {
+
+                        //TODO: LOAD THE ELEVATOR CONTRACTS AND SIGNERS ON ROOM JOIN
+                        //let _contractAddress = currentRoom.elevators[_currentElevatorId];
+
+                        let result = await SolidityElevatorGame.playOffChain(
+                            this.gameLastCheckpoint.data,
+                            this.currentRoom
+                        );
+
+                        console.log(result);
+                    } catch (err) {
+                        console.log(err);
+                    }
+                }
+            }
+        },
+
         async getCheckpointFromBlockchain() {
             console.log(`SECTF: getCheckpointFromBlockchain()`);
             if (this.currentRoomId == null || this.currentRoomStatus != 2) { return null; }
@@ -406,7 +434,7 @@ export const useSECTFStore = defineStore({
 
                     console.log(` - Last checkpoint was: ${(this.gameLastCheckpoint == null)?"null":this.gameLastCheckpoint.data.turn}`);
 
-                    let _checkpointFromRemote = _gameStore.buildCheckpointFrom(_gameState);
+                    let _checkpointFromRemote = SolidityElevatorGame.buildCheckpointFrom(_gameState);
                     let _checkpointHash = this.getCheckpointHash(_checkpointFromRemote);
 
                     let _newCheckpoint = {
@@ -577,6 +605,8 @@ export const useSECTFStore = defineStore({
                     this.gamePeersOnline = new Array(this.currentRoom.numberOfPlayers).fill(false);
                     this.gamePeersOnline[this.currentRoomPlayerNumber] = true;
                     this.gameInternalStatus = 1;
+
+                    _turnLoop = setInterval(this.automaticLoop, AUTOMATIC_INTERVAL_TIME);
                     
                     _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
 
@@ -588,7 +618,6 @@ export const useSECTFStore = defineStore({
                     _trysteroRoom.onPeerLeave((peerId) => {
                         if (peerId in this.gamePeers) {
                             console.log(` > Player #${this.gamePeers[peerId].playerNumber} (${this.gamePeers[peerId].address}) left the game`);
-                            
                             this.gamePeersTurnMode = new Array(this.currentRoom.numberOfPlayers).fill(0);
                             this.gamePeersOnline[this.gamePeers[peerId].playerNumber] = false;
                             delete this.gamePeers[peerId];
@@ -873,6 +902,9 @@ export const useSECTFStore = defineStore({
             _offchainSigner = null;
             _sendMessage = null;
             _getMessage = null;
+            if (_turnLoop != null) {
+                clearInterval(_turnLoop);
+            }
         }
     }
 });

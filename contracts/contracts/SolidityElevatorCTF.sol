@@ -402,7 +402,7 @@ contract SolidityElevatorCTF {
         GameRoom memory _room = gameRooms[gameRoomId];
         ElevatorData[] memory _elevatorsData = elevatorsData[gameRoomId];
     
-        if (_room.status > GameRoomStatus.Ready) { revert GameRoomPlayOnFinished(gameRoomId); }
+        if (_room.status != GameRoomStatus.Ready) { revert GameRoomPlayOnFinished(gameRoomId); }
 
         FloorButtons[] memory _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
         uint8[] memory _topScoreElevators = calculateTopScoreElevators(_elevatorsData);
@@ -426,7 +426,7 @@ contract SolidityElevatorCTF {
                     NEW_PASSENGERS_SPAWN_RATE
                 );
                 
-                // If a passenger needs to be added, push it into storage and update elevator lights
+                // If a passenger needs to be added, push it into storage and update floor lights
                 if (_createNewPassenger) {
                     floorPassengersData[gameRoomId][_startFloor].passengers.push(_targetFloor);
                     if (_floorButtons[_startFloor] == FloorButtons.Off) {
@@ -811,9 +811,9 @@ contract SolidityElevatorCTF {
         }
     }
 
-    function newPassenger(uint64 random, uint8 totalFloors, uint8 waitingPassagers, uint8 maxWaitingPassengers, uint8 spawnRate) private pure returns (bool created, uint8 startFloor, uint8 targetFloor) {
+    function newPassenger(uint64 random, uint8 totalFloors, uint8 waitingPassengers, uint8 maxWaitingPassengers, uint8 spawnRate) private pure returns (bool created, uint8 startFloor, uint8 targetFloor) {
         require(spawnRate > 0);
-        if (waitingPassagers >= maxWaitingPassengers) { return (false, 0, 0); }
+        if (waitingPassengers >= maxWaitingPassengers) { return (false, 0, 0); }
         if (random % spawnRate == 0) {
             random >>= 8;
             uint8 _startFloor = uint8(random % totalFloors);
