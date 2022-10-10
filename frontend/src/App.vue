@@ -10,11 +10,11 @@
 </script>
 
 <template>
-  <NavBar v-if="ethereumStore.networkOk && (width >= 1400 && height >= 1000)"/>
-  <div id="routerViewContainer" class="flex flex-center column" v-if="ethereumStore.networkOk && (width >= 1400 && height >= 1000)">
+  <NavBar v-if="ethereumStore.networkOk && (width >= 1400 && height >= 950)"/>
+  <div id="routerViewContainer" class="flex flex-center column" v-if="ethereumStore.networkOk && (width >= 1400 && height >= 950)">
     <RouterView/>
   </div>
-  <div v-else-if="!(width >= 1400 && height >= 1000)">
+  <div v-else-if="!(width >= 1400 && height >= 950)">
     <div class="oops">Oops...</div>
     <div class="message">SolidityElevatorCTF currently requires a minimum window resolution of 1400px by 1000px</div>
   </div>

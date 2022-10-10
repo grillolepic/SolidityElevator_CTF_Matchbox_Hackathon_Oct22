@@ -383,9 +383,18 @@ export const useSECTFStore = defineStore({
             }
         },
 
+        async toggleAutomaticTurns() {
+            console.log(`SECTF: toggleAutomaticTurns()`);
+            if (this.currentRoomId == null || this.currentRoomStatus != 2) { return null; }
+            if (this.gameInternalStatus == 2) {
+                this.gamePeersTurnMode[this.currentRoomPlayerNumber] = (this.gamePeersTurnMode[this.currentRoomPlayerNumber] == 0)?1:0;
+                _sendMessage({type: "sync_turn_mode", data: this.gamePeersTurnMode[this.currentRoomPlayerNumber]});
+            }
+        },
+
         async getCheckpointFromBlockchain() {
             console.log(`SECTF: getCheckpointFromBlockchain()`);
-            if (this.currentRoomId == null || this.currentRoomStatus < 2) { return null; }
+            if (this.currentRoomId == null || this.currentRoomStatus != 2) { return null; }
 
             try {
                 let _gameState = await _solidityElevatorCTFContract.getGameState(this.currentRoomId);
@@ -564,53 +573,26 @@ export const useSECTFStore = defineStore({
             if (this.currentRoom.numberOfPlayers > 1) {
                 if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
 
-                    let peersTurnMode = [];
-                    let peersOnline = [];
-                    for (let i=0; i<this.currentRoom.numberOfPlayers; i++) {
-                        peersTurnMode.push(0);
-                        peersOnline.push(i == this.currentRoomPlayerNumber);
-                    }
-
-                    this.$patch({
-                        gamePeersTurnMode: peersTurnMode,
-                        gamePeersOnline: peersOnline,
-                        gameInternalStatus: 1
-                    });
+                    this.gamePeersTurnMode = new Array(this.currentRoom.numberOfPlayers).fill(0);
+                    this.gamePeersOnline = new Array(this.currentRoom.numberOfPlayers).fill(false);
+                    this.gamePeersOnline[this.currentRoomPlayerNumber] = true;
+                    this.gameInternalStatus = 1;
                     
                     _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
 
                     [_sendMessage, _getMessage] = _trysteroRoom.makeAction('message');
                     _getMessage((data, peer) => this.getMessage(data, peer));
 
-                    _trysteroRoom.onPeerJoin(async () => {
-                        if (this.gameInternalStatus == 1) {
-                            let ts = Date.now();                    
-                            let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [_ethereumStore.address, ts]);
-                            let signedTimestampAddress = await _offchainSigner.signMessage(utils.arrayify(hashedTimestampAddress));
-                            _sendMessage({ type: "id", data: { address: _ethereumStore.address, timestamp: ts, signature: signedTimestampAddress }});
-                        }
-                    });
+                    _trysteroRoom.onPeerJoin(async () => this.sendIdToPeers());
 
                     _trysteroRoom.onPeerLeave((peerId) => {
                         if (peerId in this.gamePeers) {
                             console.log(` > Player #${this.gamePeers[peerId].playerNumber} (${this.gamePeers[peerId].address}) left the game`);
-
-                            let playerLeft = this.gamePeers[peerId].playerNumber;
-                            let newTurnMode = [...this.gamePeersTurnMode];
-                            let newOnline = [...this.gamePeersOnline];
-                            let newPeers = {...this.gamePeers };
-
-                            newTurnMode[playerLeft] = 0;
-                            newOnline[playerLeft] = false;
-                            delete newPeers[peerId];
-
-                            this.$patch({
-                                gamePeersTurnMode: newTurnMode,
-                                gamePeersOnline: newOnline,
-                                gamePeers: { ...newPeers }
-                            });
-
-                            this.updatePlayers();
+                            
+                            this.gamePeersTurnMode = new Array(this.currentRoom.numberOfPlayers).fill(0);
+                            this.gamePeersOnline[this.gamePeers[peerId].playerNumber] = false;
+                            delete this.gamePeers[peerId];
+                            this.gameInternalStatus = 1;
                         }
                     });
                 } else {
@@ -626,11 +608,20 @@ export const useSECTFStore = defineStore({
             }
         },
 
+        async sendIdToPeers() {
+            if (this.gameInternalStatus == 1) {
+                let ts = Date.now();                    
+                let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [_ethereumStore.address, ts]);
+                let signedTimestampAddress = await _offchainSigner.signMessage(utils.arrayify(hashedTimestampAddress));
+                _sendMessage({ type: "id", data: { address: _ethereumStore.address, timestamp: ts, signature: signedTimestampAddress }});
+            }
+        },
+
         async getMessage(message, peerId) {
             console.log(`SECTF: getMessage(${message.type}, ${peerId})`);
             console.log(`gameInternalStatus: ${this.gameInternalStatus}`);
 
-            if (this.gameInternalStatus == 1 && message.type == "id") {
+            if (this.gameInternalStatus == 1 && message.type == "id" && !(peerId in this.gamePeers)) {
                 try {
                     let timeDiff = Math.abs(Date.now() - message.data.timestamp);
                     if (timeDiff < 10000) {
@@ -640,20 +631,47 @@ export const useSECTFStore = defineStore({
                             let hashedTimestampAddress = utils.solidityKeccak256(['uint160','uint256'], [message.data.address, message.data.timestamp]);
                             let signerAddress = utils.verifyMessage(utils.arrayify(hashedTimestampAddress), message.data.signature);
                             if (signerAddress == this.currentRoom.offchainPublicKeys[playerNumber]) {
+
                                 this.gamePeers[peerId] = {
                                     playerNumber: playerNumber,
                                     address: receivedAddress
                                 }
                                 this.gamePeersOnline[playerNumber] = true;
                                 console.log(` > Player #${playerNumber} (${receivedAddress}) joined the game`);
-                                this.updatePlayers();
+                                
+                                if (Object.keys(this.gamePeers).length == (this.currentRoom.numberOfPlayers - 1)) {
+                                    this.gameInternalStatus = 2;
+                                    
+                                    setTimeout(() => {
+                                        if (this.gameLastCheckpoint == null && this.gameTempCheckpoint == null) {
+                                            return this.gameInternalStatus == -2;
+                                        }
+                                        _sendMessage({type: "sync_checkpoint", data: (this.gameTempCheckpoint == null)?this.gameLastCheckpoint:this.gameTempCheckpoint});
+                                    }, 1000);
+                                } else {
+                                    if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
+                                        this.gamePeersTurnMode = new Array(this.currentRoom.numberOfPlayers).fill(0);
+                                        this.gameInternalStatus = 1;
+                                    } else {
+                                        this.gameInternalStatus = -1;
+                                        this.leave();
+                                    }
+                                }
+                                
+                                this.sendIdToPeers();
+
                             } else { console.log(` > id rejected because provided signature could not be verified`); }
                         } else { console.log(` > id rejected because address has not joined the room`); }
                     } else { console.log(` > id rejected because timestamp is too old`); }
                 } catch(err) {
                     console.log(err);
                 }
+            } else if (this.gameInternalStatus == 2 && message.type == "sync_turn_mode") {
 
+                const senderPlayerNumber = this.gamePeers[peerId].playerNumber;
+                this.gamePeersTurnMode[senderPlayerNumber] = message.data;
+                console.log(` - Player ${senderPlayerNumber} switch turn mode to: ${message.data}`);
+                
             } else if (this.gameInternalStatus > 1 && message.type == "sync_checkpoint") {
                 try {
 
@@ -672,7 +690,7 @@ export const useSECTFStore = defineStore({
                         return;
                     }
 
-                    const otherPlayerNumber = this.gamePeers[peerId].playerNumber;
+                    const senderPlayerNumber = this.gamePeers[peerId].playerNumber;
 
                     if (!message.data.on_chain) {
                         //02. Then, verify all provided signatures
@@ -691,14 +709,14 @@ export const useSECTFStore = defineStore({
 
                         //03. Finally, verify that whoever sent the message has signed it
                         
-                        if (!validSignatures.includes(otherPlayerNumber)) {
+                        if (!validSignatures.includes(senderPlayerNumber)) {
                             console.log("NOT SIGNED BY SENDER");
                             return;
                         }
 
-                        console.log(`Player ${otherPlayerNumber} provided a correct hash for off-chain turn ${checkpointData.turn} with ${validSignatures.length} valid signatures`);
+                        console.log(`Player ${senderPlayerNumber} provided a correct hash for off-chain turn ${checkpointData.turn} with ${validSignatures.length} valid signatures`);
                     } else {
-                        console.log(`Player ${otherPlayerNumber} provided an unsigned supposedly on-chain turn ${checkpointData.turn} with a correct hash`);
+                        console.log(`Player ${senderPlayerNumber} provided an unsigned supposedly on-chain turn ${checkpointData.turn} with a correct hash`);
                     }
 
 
@@ -833,26 +851,6 @@ export const useSECTFStore = defineStore({
                         _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
                     }
                 }, 1000);
-            }
-        },
-
-        async updatePlayers() {
-            console.log("SECTF: updatePlayers()");
-            if (Object.keys(this.gamePeers).length == (this.currentRoom.numberOfPlayers - 1)) {
-                this.gameInternalStatus = 2;
-                setTimeout(() => {
-                    if (this.gameLastCheckpoint == null && this.gameTempCheckpoint == null) {
-                        return this.gameInternalStatus == -2;
-                    }
-                    _sendMessage({type: "sync_checkpoint", data: (this.gameTempCheckpoint == null)?this.gameLastCheckpoint:this.gameTempCheckpoint});
-                }, 1000);
-            } else {
-                if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
-                    this.gameInternalStatus = 1;
-                } else {
-                    this.gameInternalStatus = -1;
-                    this.leave();
-                }
             }
         },
 

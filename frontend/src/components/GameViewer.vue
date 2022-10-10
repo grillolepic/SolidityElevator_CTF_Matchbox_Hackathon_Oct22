@@ -1,7 +1,10 @@
 <script setup>
     import { useSECTFStore } from '@/stores/sectf';
+    import { defineEmits } from '@vue/runtime-core';
 
     const SECTFStore = useSECTFStore();
+
+    const emit = defineEmits(['playPause']);
 
     function floorClass(floor) {
         let _classes = {};
@@ -60,11 +63,11 @@
     function doorsContainerStyle() { return `width: ${floorHeight()}px; height: ${floorHeight() * 0.8}px;`; }
     function doorStyle() { return `width: ${floorHeight() / 2}px; height: ${floorHeight() * 0.8}px;`; }
 
-
     function turnButtonClick() {
-        console.log("@!!!!");
+        if (SECTFStore.currentRoomStatus == 2 || !SECTFStore.gameBlockchainInteraction || SECTFStore.gameInternalStatus != 2) {
+            emit("playPause");
+        }
     }
-
 </script>
 
 <template>
@@ -112,7 +115,7 @@
             <div :style="floorAndPassengersSectionStyle()" class="flex row">
 
                 <div id="playPauseButton" class="containNoRepeatCenter" @click="turnButtonClick()"
-                    :class="{ 'playing': SECTFStore.automaticPlaying, 'notPlaying': !SECTFStore.automaticPlaying, 'disabled': (SECTFStore.currentRoomStatus != 2 || SECTFStore.gameBlockchainInteraction)}"></div>
+                    :class="{ 'playing': SECTFStore.automaticPlaying, 'notPlaying': !SECTFStore.automaticPlaying, 'disabled': (SECTFStore.currentRoomStatus != 2 || SECTFStore.gameBlockchainInteraction || SECTFStore.gameInternalStatus != 2)}"></div>
 
                 <div class="flex column">
                     <id class="turnNumber">TURN {{SECTFStore.gameLastCheckpoint.data.turn}}</id>

@@ -1,7 +1,7 @@
 <script setup>
     import { useSECTFStore } from '@/stores/sectf';
     import { useRouter, onBeforeRouteLeave } from 'vue-router';
-    import { ref, onMounted, onUnmounted, defineProps } from '@vue/runtime-core';
+    import { ref, onMounted, onUnmounted } from '@vue/runtime-core';
     import LoadingSpinner from '@/components/LoadingSpinner.vue';
     import GameViewer from '@/components/GameViewer.vue';
   
@@ -56,6 +56,10 @@
         }
     }
 
+    async function playPause() {
+        SECTFStore.toggleAutomaticTurns();
+    }
+
     onBeforeRouteLeave((to, from, next) => { SECTFStore.leave(); next(); });
     onUnmounted((to, from, next) => { SECTFStore.leave(); });
 </script>
@@ -82,7 +86,7 @@
 
     <div id="gameOverContainer" class="flex column" v-if="SECTFStore.gameLastCheckpoint != null">
         <div id="gameContainer" class="flex column flex-center">
-            <GameViewer />
+            <GameViewer @playPause="playPause()"/>
         </div>
     </div>
 
@@ -191,9 +195,10 @@
     .disabledButton:hover { background-color: var(--grey) !important; color: var(--white) !important;}
 
     #gameOverContainer {
-        margin-top: 40px;
         height: 100%;
         align-items: center;
+        justify-content: center;
+        margin-bottom: 50px;
     }
 
     #loadingMessage {
