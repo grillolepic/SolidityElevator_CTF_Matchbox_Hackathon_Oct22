@@ -45,6 +45,7 @@ describe("EncodeDecode", function () {
             gameState[0].status,
             gameState[0].indices,
             gameState[0].randomSeed,
+            gameState[0].actionsSold,
             gameState[0].waitingPassengers,
             gameState[1],
             gameState[2]
@@ -53,7 +54,7 @@ describe("EncodeDecode", function () {
         const abi = ethers.utils.defaultAbiCoder;
         let offChainHashedCheckpoint = ethers.utils.keccak256(
             abi.encode(
-                [ "uint256", "uint16", "uint8", "uint8[]", "uint64[2]", "uint8",
+                [ "uint256", "uint16", "uint8", "uint8[]", "uint64[2]", "uint256[2]", "uint8",
                     "tuple(address, uint8, uint8, uint8, uint8, uint8[], uint8[], uint32, uint8, uint16, bytes32)[]",
                     "tuple(uint8[])[]"
                 ],[   
@@ -62,6 +63,7 @@ describe("EncodeDecode", function () {
                     gameState[0].status,
                     gameState[0].indices,
                     gameState[0].randomSeed,
+                    gameState[0].actionsSold,
                     gameState[0].waitingPassengers,
                     gameState[1],
                     gameState[2]
@@ -83,6 +85,18 @@ describe("EncodeDecode", function () {
         // THIS WILL WITH THE CURRENT CONTRACT
         // It was used to test applying a new state to a game without verifying signatures, which was tested separatedly
 
+        let a = [1,
+            gameState[0].turn,
+            gameState[0].status,
+            gameState[0].indices,
+            gameState[0].randomSeed,
+            gameState[0].actionsSold,
+            gameState[0].waitingPassengers,
+            gameState[1],
+            gameState[2],
+            [ hashedCheckpointSignature1, hashedCheckpointSignature2 ]];
+        console.log(a);
+
         try {
             await SECTF.loadCheckpoint(
                 1,
@@ -90,6 +104,7 @@ describe("EncodeDecode", function () {
                 gameState[0].status,
                 gameState[0].indices,
                 gameState[0].randomSeed,
+                gameState[0].actionsSold,
                 gameState[0].waitingPassengers,
                 gameState[1],
                 gameState[2],
@@ -101,7 +116,9 @@ describe("EncodeDecode", function () {
             for (let i=0; i<8; i++) {
                 console.log(`GameRoom's floor ${i}: ${gameState2[2][i].passengers.length} passengers`);
             }
-        } catch(err) {}
+        } catch(err) {
+            console.log(err);
+        }
 
         expect(true).to.eq(true);
       });

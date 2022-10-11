@@ -82,7 +82,7 @@
   }
 
   #logo {
-    background-image: url(../img/logoWithName.svg);
+    background-image: url(../assets/img/logoWithName.svg);
     margin-bottom: 20px;
     width: 300px;
     height: 100px;

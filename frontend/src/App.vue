@@ -30,7 +30,7 @@
   }
 
   #logo {
-    background-image: url(../img/logo.svg);
+    background-image: url(img/logo.svg);
     margin-bottom: 20px;
     width: 300px;
     height: 300px;

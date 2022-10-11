@@ -1,8 +1,3 @@
-[X] Implement off-chain turns
-[ ] Make sure consensus works with off-chain mode
-[ ] Implement on-chain settlement of off-chain states
-
 [ ] Display winners
-[ ] Handle events
 [ ] Test games with different number of players
 [ ] Test room managment and make final improvements

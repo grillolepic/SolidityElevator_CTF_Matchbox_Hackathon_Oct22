@@ -54,7 +54,7 @@
 
     async function pushState(finish = false) {
         if (canPushState() || (finish && SECTFStore.currentRoom.numberOfPlayers > 1)) {
-            await SECTFStore.pushState(finish);
+            await SECTFStore.pushStateToBlockchain(finish);
             dialog.value = false;
         }
     }
@@ -73,7 +73,7 @@
 
 <template>
 
-    <div id="blackout" class="flex flex-center" :class="{'showBlackout': dialog || isFinished() || (SECTFStore.gameBlockchainInteraction)}" @click="showOnChainDialog(false)" v-if="SECTFStore.currentRoomStatus == 2"></div>
+    <div id="blackout" class="flex flex-center" :class="{'showBlackout': dialog || isFinished() || (SECTFStore.gameBlockchainInteraction)}" @click="showOnChainDialog(false)" v-if="SECTFStore.currentRoomStatus >= 2"></div>
 
     <div id="finishedDialog" class="flex column flex-center" :class="{'showDialog': isFinished() }" v-if="(SECTFStore.currentRoomStatus > 2 || SECTFStore.gameLastCheckpoint != null && SECTFStore.gameLastCheckpoint.data.status > 2)">
         <div id="finishedTitle" class="flex flex-center">Game Finished!</div>
@@ -172,7 +172,7 @@
         height: 40px;
         background-color: var(--grey);
         cursor: pointer;
-        background-image: url(../img/chain.svg);
+        background-image: url(../assets/img/chain.svg);
         z-index: 400;
     }
 
