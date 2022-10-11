@@ -182,7 +182,6 @@ class SolidityElevatorGame {
                     if (nextState.elevators[_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
                     nextState.elevators[_currentElevatorId].floorQueue.push(_result.floorQueue[i]);
                 }
-                console.log(nextState.elevators[_currentElevatorId].floorQueue);
             }
         } catch (err) {
             console.log(err);
@@ -220,10 +219,8 @@ class SolidityElevatorGame {
                 nextState.elevators[_currentElevatorId].passengers.splice(_targetOutgoingPassengerIndex,1);
                 // 2) Add 1 to the elevator's score and check if score makes current elevator the winner
                 nextState.elevators[_currentElevatorId].score++;
-                console.log(nextState.elevators[_currentElevatorId].score);
                 if (nextState.elevators[_currentElevatorId].score == currentRoom.scoreToWin) {
                     _won = true;
-                    console.log("WON!");
                 }
                 // 3) Update _topScoreElevators
                 _topScoreElevators = SolidityElevatorGame.#calculateTopScoreElevators(nextState.elevators);
@@ -340,14 +337,13 @@ class SolidityElevatorGame {
                 nextState.indices = [..._newIndices];
             }
 
-            nextState.turn++;
-
             //if HARD_TURN_DEADLINE is reached, the game is probably on an infinite loop. Finish it without a winner
             if (nextState.turn > HARD_TURN_DEADLINE) {
                 nextState.status = GAME_STATUS_FINISHED_WITHOUT_WINNER;
             }
         }
 
+        nextState.turn++;
         return nextState;
     }
 

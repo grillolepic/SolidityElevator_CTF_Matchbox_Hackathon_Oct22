@@ -112,14 +112,14 @@
                 <div class="dialogDescription">This is a single player game and must be fully verified on-chain be completed.</div>
                 <div class="button" @click="playOnChain(1 + (SECTFStore.gameLastCheckpoint.data.turn - SECTFStore.gameLastBlockchainTurn), true)">Play {{SECTFStore.gameLastCheckpoint.data.turn - SECTFStore.gameLastBlockchainTurn}} Turns On Chain</div>
             </div>
-            <div v-else>
-                <div>This game can be verified on-chain to be finished</div>
-                <div id="pushStateButton" class="button" :class="{'disabledButton': !canPushState() }" @click="pushState()">Push Current State to the Blockchain</div>
+            <div class="flex column flex-center" v-else>
+                <div>This game can be verified on-chain to be complete.</div>
+                <div id="pushStateButton" class="button" :class="{'disabledButton': !canPushState() }" @click="pushState(true)">Push Current State to the Blockchain</div>
             </div>
         </div>
     </div>
 
-    <div id="onChainDialog" class="flex column flex-center" :class="{'showDialog': dialog || (SECTFStore.gameBlockchainInteraction)}" v-if="SECTFStore.currentRoomStatus == 2">
+    <div id="onChainDialog" class="flex column flex-center" :class="{'showDialog': dialog || (SECTFStore.gameBlockchainInteraction && !SECTFStore.finishedGameBlockchainInteraction)}" v-if="SECTFStore.currentRoomStatus == 2">
         <div id="onChainTitle" class="flex flex-center">On-Chain Actions</div>
         <div class="dialogActions flex column flex-center" v-if="SECTFStore.gameBlockchainInteraction">
             <LoadingSpinner />

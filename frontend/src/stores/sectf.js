@@ -461,22 +461,23 @@ export const useSECTFStore = defineStore({
                         let checkpointSignature = await _offchainSigner.signMessage(utils.arrayify(_checkpointHash));
                         _newCheckpoint.signatures[this.currentRoomPlayerNumber] = checkpointSignature;
 
+                        if (nextState.turn == 371) {
+                            console.log("!");
+                        }
+                        
                         if (this.currentRoom.numberOfPlayers > 1) {
                             this.gameTempCheckpoint = _newCheckpoint;
+                            if (sendOnCreate) {
+                                _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
+                            }
                         } else {
                             let storedGameData = this.getLocalStorage();
                             storedGameData.checkpoint = _newCheckpoint;
                             localStorage.setItem(this.localKeyGameRoom, JSON.stringify(storedGameData));
                             this.gameLastCheckpoint = _newCheckpoint;
-                        }
 
-                        if (nextState.status > 2) {
-                            this.finishGame();
-                        }
-
-                        if (sendOnCreate && this.currentRoom.numberOfPlayers > 1) {
-                            _sendMessage({type: "sync_checkpoint", data: this.gameTempCheckpoint});
-                        }
+                            if (nextState.status > 2) { this.finishGame(); }
+                        }                        
                     } else {
                         if (this.gameLastCheckpoint.data.status > 2) {
                             this.finishGame();
@@ -944,6 +945,8 @@ export const useSECTFStore = defineStore({
 
                     } else {
 
+                        console.log(message.data);
+
                         if (validSignatures.length < this.currentRoom.numberOfPlayers) {
 
                             //I. PARTIALLY SIGNED CHECKPOINT == TEMP CHECKPOINT OR EXATLY +1 FROM LAST CHECKPOINT
@@ -964,8 +967,6 @@ export const useSECTFStore = defineStore({
                                         console.log("CONSENSUS BROKEN... settle on chain...");
                                         console.log(this.gameTempCheckpoint.data);
                                         console.log(checkpointData);
-                                        
-
                                     }
                                 } else {
                                     console.log("CONSENSUS BROKEN... settle on chain...");
@@ -1022,6 +1023,7 @@ export const useSECTFStore = defineStore({
 
                             console.log(" -> IV. FULLY SIGNED, NEWER CHECKPOINT");
 
+
                             let storedGameData = this.getLocalStorage();
                             let _newGameLastCheckpoint = JSON.parse(JSON.stringify(message.data));
                             storedGameData.checkpoint = _newGameLastCheckpoint;
@@ -1030,11 +1032,9 @@ export const useSECTFStore = defineStore({
                             if (this.gameTempCheckpoint != null && (this.gameTempCheckpoint.data.turn <= this.gameLastCheckpoint.data.turn)) {
                                 this.gameTempCheckpoint = null;
                             }
+
                         } else {
-                            console.log("WTF");
-                            console.log(this.gameTempCheckpoint);
-                            console.log(this.gameLastCheckpoint);
-                            console.log(checkpointData);
+                            //console.log("WTF");
                         }
                     }
 
