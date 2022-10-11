@@ -27,6 +27,8 @@
     });
 
     async function afterReloadRoom() {
+        console.log("GameRoom.vue afterReloadRoom()");
+        console.log(SECTFStore.currentRoom);
         if (SECTFStore.currentRoomId == null) {
             return await router.push({ name: "Home" });
         } else if (SECTFStore.currentRoomJoined) {
