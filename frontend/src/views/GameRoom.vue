@@ -16,17 +16,18 @@
     const elevatorContract = ref('');
     
     watch(currentRoomStatus, async (newValue, oldValue) => {
-        await afterReloadRoom();
+        if (SECTFStore.currentRoomId != null) {
+            await afterReloadRoom();
+        }
     });
 
     onMounted(async () => {
         console.log("GameRoom.vue onMounted()");
         SECTFStore.reset();
         await SECTFStore.loadRoom(props.roomId);
-        afterReloadRoom();
     });
 
-    async function afterReloadRoom() {
+    async function afterReloadRoom() {        
         if (SECTFStore.currentRoomId == null) {
             return await router.push({ name: "Home" });
         } else if (SECTFStore.currentRoomJoined) {

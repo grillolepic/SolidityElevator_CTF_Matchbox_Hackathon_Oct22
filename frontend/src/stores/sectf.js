@@ -1067,7 +1067,7 @@ export const useSECTFStore = defineStore({
             return null;
         },
 
-        async leave() {
+        leave() {
             console.log("SECTF: leave()");
             if (_trysteroRoom != null) {
                 _trysteroRoom.leave();
