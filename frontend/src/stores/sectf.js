@@ -304,8 +304,10 @@ export const useSECTFStore = defineStore({
                         currentRoomPlayerNumber: null
                     });
                 }
-            } catch (err) {}
-
+            } catch (err) {
+                console.log(err);
+            }
+                
             await this.loadActiveRooms();
             this.$patch({
                 loadingRoom: false,
