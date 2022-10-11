@@ -1,3 +1,0 @@
-[ ] Display winners
-[ ] Test games with different number of players
-[ ] Test room managment and make final improvements

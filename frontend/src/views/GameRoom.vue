@@ -30,7 +30,7 @@
         if (SECTFStore.currentRoomId == null) {
             return await router.push({ name: "Home" });
         } else if (SECTFStore.currentRoomJoined) {
-            if (SECTFStore.currentRoomStatus == 2) {
+            if (SECTFStore.currentRoomStatus >= 2 && SECTFStore.currentRoomStatus < 5) {
                 return await router.push({ name: "Game", params: { roomId: SECTFStore.currentRoomId }});
             }
         }

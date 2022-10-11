@@ -40,7 +40,9 @@ let _resetState = {
     gamePeersTurnMode: [],
     gamePeersOnline: [],
     gameBlockchainInteraction: false,
-    finishedGameBlockchainInteraction: false
+    finishedGameBlockchainInteraction: false,
+
+    playingOffChain: false,
 };
 
 let _initialState = {
@@ -269,11 +271,13 @@ export const useSECTFStore = defineStore({
                     if (gameState[0].status >= 3) {
                         for (let i=0; i<gameState[1].length; i++) {
                             playerRanking.push({
+                                playerNumber: i,
                                 player: gameState[0].players[i],
+                                elevator: gameState[1][i].elevator,
                                 score: gameState[1][i].score
                             });
                         }
-                        playerRanking.sort((a,b) => a.score - b.score);
+                        playerRanking.sort((a,b) => b.score - a.score);
                     }
 
                     return this.$patch({
@@ -431,7 +435,10 @@ export const useSECTFStore = defineStore({
 
         async createOffChainTempCheckpoint(sendOnCreate = true) {
             console.log("SECTF: createOffChainTempCheckpoint()");
-            if (this.gameLastCheckpoint != null) {
+            if (this.gameLastCheckpoint != null && !this.playingOffChain) {
+
+                this.playingOffChain = true;
+
                 try {
                     let nextState = await SolidityElevatorGame.playOffChain(
                         this.gameLastCheckpoint.data,
@@ -478,6 +485,7 @@ export const useSECTFStore = defineStore({
                 } catch (err) {
                     console.log(err);
                 }
+                this.playingOffChain = false;
             }
         },
 
@@ -546,7 +554,7 @@ export const useSECTFStore = defineStore({
 
         async getCheckpointFromBlockchain() {
             console.log(`SECTF: getCheckpointFromBlockchain()`);
-            if (this.currentRoomId == null || this.currentRoomStatus != 2) { return null; }
+            if (this.currentRoomId == null || this.currentRoomStatus < 2 && this.currentRoomStatus > 4) { return null; }
 
             try {
                 let _gameState = await _solidityElevatorCTFContract.getGameState(this.currentRoomId);
@@ -684,7 +692,7 @@ export const useSECTFStore = defineStore({
 
         async startGame() {
             console.log("SECTF: startGame()");
-            if (this.currentRoomId == null || this.currentRoomStatus != 2) { return this.gameInternalStatus = -1; }
+            if (this.currentRoomId == null || this.currentRoomStatus == 1 || this.currentRoomStatus == 5) { return this.gameInternalStatus = -1; }
             
             this.gameInternalStatus = 0;
             
@@ -732,7 +740,7 @@ export const useSECTFStore = defineStore({
             this.initializeElevatorContracts();
 
             //05. Connect with other player via WebRTC and exchange signed ids before beginning sync
-            if (this.currentRoom.numberOfPlayers > 1) {
+            if (this.currentRoom.numberOfPlayers > 1 && this.currentRoomStatus == 2) {
                 if (this.gameLastCheckpoint != null || this.gameTempCheckpoint != null) {
 
                     this.gamePeersTurnMode = new Array(this.currentRoom.numberOfPlayers).fill(0);
@@ -743,14 +751,8 @@ export const useSECTFStore = defineStore({
                     _turnLoop = setInterval(this.automaticLoop, AUTOMATIC_INTERVAL_TIME);
                     
                     _trysteroRoom = joinRoom({ appId: this.contractAddress }, this.currentRoomId);
-
-                    console.log(_trysteroRoom);
-
                     [_sendMessage, _getMessage] = _trysteroRoom.makeAction('message');
                     _getMessage((data, peer) => this.getMessage(data, peer));
-
-                    console.log(_sendMessage);
-                    console.log(_getMessage);
 
                     _trysteroRoom.onPeerJoin(async () => this.sendIdToPeers());
 

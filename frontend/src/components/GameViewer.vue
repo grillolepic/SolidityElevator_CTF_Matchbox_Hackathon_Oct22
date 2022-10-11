@@ -42,21 +42,16 @@
     }
 
     function infoRowHeightStyle() { return `height: ${floorHeight() * (2/3)}px;`; }
-    
     function floorHeightStyle() { return `height: ${floorHeight()}px;`; }
     function allFloorsHeightStyle() { return `height: ${floorHeight() * SECTFStore.currentRoom.floors}px;`; }
-
     function floorNumberSectionStyle() { return `font-size: ${floorHeight() * 1.1}px; line-height: ${floorHeight() * 1.1}px; width: ${gameWidth()/10}px;`; }
     function passengersSectionStyle() { return `width:${gameWidth() * (9/10) / 3}px;`; }
     function elevatorSectionStyle() { return `width:${gameWidth() * (9/10) * (2/3)}px;`; }
     function floorAndPassengersSectionStyle() { return `width: ${gameWidth()/10 + (gameWidth() * (9/10) / 3)}px;` }
-
     function passengerInElevatorStyle() {
         return `width: ${floorHeight() / 3.5}px; height: ${floorHeight() / 3.5}px; font-size: ${floorHeight() / 4}px; margin: ${floorHeight() / 30}px;`;
     }
-
     function elevatorWidth() { return `width: ${floorHeight()}px;`; }
-
     function lightContainerHeight() { return `height: ${floorHeight() * 0.2}px;)`; }
     function lightStyle() { return `font-size: ${floorHeight() * 0.18}px; width: ${floorHeight() / 5}px;`; }
     function passengerContainerStyle() { return `width: ${floorHeight()}px; height: ${floorHeight() * 0.8}px;`; }
@@ -334,16 +329,16 @@
     .speedIcon {
         width: 20px; height: 20px;
         margin-left: 10px;
-        background-image: url('img/speed.svg');
+        background-image: url(../assets/img/speed.svg);
     }
     .balanceIcon {
         width: 20px; height: 20px;
-        background-image: url('img/balance.svg');
+        background-image: url(../assets/img/balance.svg);
     }
     .scoreIcon {
         width: 15px; height: 15px;
         margin-right: 5px;
-        background-image: url('img/score.svg');
+        background-image: url(../assets/img/score.svg);
     }
 
     .red { background-color: var(--red); }

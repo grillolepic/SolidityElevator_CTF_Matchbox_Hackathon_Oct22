@@ -366,8 +366,15 @@ contract SolidityElevatorCTF {
         elevatorsData[id] = elevData;
         floorPassengersData[id] = floorData;
 
-        emit GameRoomUpdated(id);
-
+        if (_room.status == GameRoomStatus.Ready) {
+            emit GameRoomUpdated(id);
+        } else {
+            emit GameRoomFinished(id);
+            for (uint8 i=0; i<_room.players.length; i++) {
+                removeFromActiveGameRooms(id, _room.players[i]);
+            }
+        }
+        
         bytes32 hashedCheckpoint = hashCheckpoint(id, turn, status, indices, randomSeed, actionsSold, waitingPassengers, elevData, floorData);
         bytes32 hashedCheckpointMessage = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hashedCheckpoint));
 
@@ -699,6 +706,9 @@ contract SolidityElevatorCTF {
             emit GameRoomUpdated(gameRoomId);
         } else {
             emit GameRoomFinished(gameRoomId);
+            for (uint8 i=0; i<_room.players.length; i++) {
+                removeFromActiveGameRooms(gameRoomId, _room.players[i]);
+            }
         }
     }
     

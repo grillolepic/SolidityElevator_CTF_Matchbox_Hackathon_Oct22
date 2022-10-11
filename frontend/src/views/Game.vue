@@ -69,18 +69,43 @@
 
     onBeforeRouteLeave((to, from, next) => { SECTFStore.leave(); next(); });
     onUnmounted((to, from, next) => { SECTFStore.leave(); });
+
+
+    function rankingHeight() {
+        return `height: ${(SECTFStore.currentRoom.numberOfPlayers * 50) + 120}px !important`;
+    }
+
+    function finishedDialogHeight() {
+        if (SECTFStore.currentRoomStatus > 2) {
+            return `height: ${(SECTFStore.currentRoom.numberOfPlayers * 50) + 200}px !important`;
+        }
+        return '';
+    }
+
 </script>
 
 <template>
 
     <div id="blackout" class="flex flex-center" :class="{'showBlackout': dialog || isFinished() || (SECTFStore.gameBlockchainInteraction)}" @click="showOnChainDialog(false)" v-if="SECTFStore.currentRoomStatus >= 2"></div>
 
-    <div id="finishedDialog" class="flex column flex-center" :class="{'showDialog': isFinished() }" v-if="(SECTFStore.currentRoomStatus > 2 || SECTFStore.gameLastCheckpoint != null && SECTFStore.gameLastCheckpoint.data.status > 2)">
+    <div id="finishedDialog" class="flex column flex-center" :class="{'showDialog': isFinished() }" v-if="(SECTFStore.currentRoomStatus > 2 || SECTFStore.gameLastCheckpoint != null && SECTFStore.gameLastCheckpoint.data.status > 2)" :style="finishedDialogHeight()">
         <div id="finishedTitle" class="flex flex-center">Game Finished!</div>
         <div class="dialogActions flex column flex-center" v-if="SECTFStore.finishedGameBlockchainInteraction">
             <LoadingSpinner />
         </div>
-        <div class="dialogActions flex column flex-center" v-else-if="SECTFStore.currentRoomStatus > 2">
+        <div class="dialogActions flex column flex-center" v-else-if="SECTFStore.currentRoomStatus > 2" :style="rankingHeight()">
+            <div class="dialogDescription">This game has finished {{(SECTFStore.currentRoomStatus == 3)?'with a winner':'without a winner'}}.</div>
+            <div v-for="w in SECTFStore.currentRoomRanking.length" :key="w">
+                <div class="rankingRow flex row">
+                   <div class="rankingNumber">#{{w}}</div>
+                   <div class="rankingPlayerColumn flex column">
+                        <div class="rankingWinnerName">ELEVATOR {{SECTFStore.currentRoomRanking[w-1].playerNumber}}</div>
+                        <div class="rankingWinnerAddress">{{SECTFStore.currentRoomRanking[w-1].elevator}}</div>
+                    </div>
+                    <div class="rankingScore">{{SECTFStore.currentRoomRanking[w-1].score}}</div>
+                </div>
+            </div>
+            <router-link :to="{ name: 'Home' }" id="backButton">Go Back</router-link>
         </div>
         <div class="dialogActions flex column flex-center" v-else>
             <div class="flex column flex-center" v-if="SECTFStore.currentRoom.numberOfPlayers == 1">
@@ -243,10 +268,6 @@
 
 
 
-
-
-
-
     #finishedDialog {
         position: fixed;
         width: 50%;
@@ -269,9 +290,44 @@
     }
 
     .dialogDescription {
-        width: 80%;
+        width: 450px;
         text-align: center;
         margin-bottom: 30px;
     }
 
+    #backButton {
+      font-weight: 800;
+      text-decoration: none;
+      margin-top: 20px;
+    }
+
+    .rankingRow {
+        width: 430px;
+        margin-bottom: 10px;
+    }
+
+    .rankingNumber {
+        font-weight: 700;
+        font-size: 21px;
+        color: var(--gradient-1);
+    }
+    .rankingPlayerColumn {
+        width: 400px;
+    }
+
+    .rankingWinnerName {
+        margin-left: 20px;
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .rankingWinnerAddress {
+        margin-left: 20px;
+        font-size: 12px;
+    }
+
+    .rankingScore {
+        font-weight: 700;
+        font-size: 21px;
+        color: var(--gradient-4);
+    }
 </style>
