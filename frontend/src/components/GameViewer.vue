@@ -262,8 +262,8 @@
         opacity: 0.5;
     }
 
-    .play { background-image: url(img/play.svg);}
-    .pause { background-image: url(img/pause.svg);}
+    .play { background-image: url(../img/play.svg);}
+    .pause { background-image: url(../img/pause.svg);}
 
     .strech {
         align-items: stretch;
@@ -397,7 +397,7 @@
     }
 
     .playing {
-        background-image: url(img/pause_solo.svg);
+        background-image: url(../img/pause_solo.svg);
         background-color: var(--red);
     }
 
@@ -406,7 +406,7 @@
     }
 
     .notPlaying {
-        background-image: url(img/play_solo.svg);
+        background-image: url(../img/play_solo.svg);
         background-color: var(--play);
     }
 
@@ -415,7 +415,7 @@
     }
 
     .disabled {
-        background-image: url(img/play_solo.svg);
+        background-image: url(../img/play_solo.svg);
         background-color: var(--dark-grey) !important;
         cursor: unset !important;
     }

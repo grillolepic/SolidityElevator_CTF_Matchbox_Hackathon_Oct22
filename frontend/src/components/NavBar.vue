@@ -17,7 +17,7 @@
 
 <style scoped>
   #logo {
-    background-image: url(img/logo.svg);
+    background-image: url(../img/logo.svg);
     width: 50px;
     height: 50px;
   }

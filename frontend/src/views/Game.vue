@@ -172,7 +172,7 @@
         height: 40px;
         background-color: var(--grey);
         cursor: pointer;
-        background-image: url(img/chain.svg);
+        background-image: url(../img/chain.svg);
         z-index: 400;
     }
 
