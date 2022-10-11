@@ -10,10 +10,10 @@
 </script>
 
 <template>
-  <div id="coverAll" class="flex column flex-center" v-if="!(width >= 1300 && height >= 950)">
+  <!--div id="coverAll" class="flex column flex-center" v-if="!(width >= 1300 && height >= 950)">
     <div class="oops">Oops...</div>
     <div class="message">SolidityElevatorCTF currently requires a minimum window resolution of 1400px by 1000px</div>
-  </div>
+  </div-->
 
   <NavBar v-if="ethereumStore.networkOk"/>
   <div id="routerViewContainer" class="flex flex-center column" v-if="ethereumStore.networkOk">
