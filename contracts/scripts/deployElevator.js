@@ -3,7 +3,7 @@ const hre = require("hardhat");
 async function main() {
   const elevatorFactory = await ethers.getContractFactory("ExampleElevator");
   for (let i=0; i<4; i++) {
-    const ELEVATOR = await elevatorFactory.deploy("0x1FcF557A46425B628928898B0Bb0Ea39439c1d76");
+    const ELEVATOR = await elevatorFactory.deploy("0x799a115229d156c4837f8b9d889762A48980138C");
     console.log(`ELEVATOR deployed to ${ELEVATOR.address}`);
   }
 }
@@ -14,9 +14,9 @@ main().catch((error) => {
 });
 
 //Last elevators deployed (Arbitrum Goerli Testnet):
-//  Elevator_1 deployed to 0xE2A0FEa6E8E68728Cb44246Ab51Fba273D99ea87
-//  Elevator_2 deployed to 0x3Af87B607Eb829764eB31604c91CEd884B57E555
-//  Elevator_3 deployed to 0x69Aa8a14d8c54715e7DB59ca7562814Eab1F0D14
-//  Elevator_4 deployed to 0xe8429bFF945a7C667f81F2927864A615f0134dcf
+//  Elevator_1 deployed to 0x3783Bd5c2584b45672834950D7f80f945b604898
+//  Elevator_2 deployed to 0x948EA79714Fa6229C4494E3622a5161d12c840C0
+//  Elevator_3 deployed to 0x82B2e50F4BDb83F8Cd46F4EE9FE9e81B6CB05dCE
+//  Elevator_4 deployed to 0x31ac2fb994Df3Ca8d4866cF4D1064E8f57f0d407
 
 //Last elevators deployed (Arbitrum Nova):
