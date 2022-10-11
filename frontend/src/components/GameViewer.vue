@@ -68,6 +68,10 @@
             emit("playPause");
         }
     }
+
+    function isTurn(p) {
+        return (SECTFStore.currentTurnPlayerNumber == p);
+    }
 </script>
 
 <template>
@@ -115,7 +119,7 @@
             <div :style="floorAndPassengersSectionStyle()" class="flex row">
 
                 <div id="playPauseButton" class="containNoRepeatCenter" @click="turnButtonClick()"
-                    :class="{ 'playing': SECTFStore.automaticPlaying, 'notPlaying': !SECTFStore.automaticPlaying, 'disabled': (SECTFStore.currentRoomStatus != 2 || SECTFStore.gameBlockchainInteraction || SECTFStore.gameInternalStatus != 2)}"></div>
+                    :class="{ 'playing': SECTFStore.automaticPlaying, 'notPlaying': !SECTFStore.automaticPlaying, 'disabled': (SECTFStore.currentRoomStatus != 2 || SECTFStore.gameBlockchainInteraction || SECTFStore.gameInternalStatus != 2 || SECTFStore.gameLastCheckpoint.data.status != 2)}"></div>
 
                 <div class="flex column">
                     <id class="turnNumber">TURN {{SECTFStore.gameLastCheckpoint.data.turn}}</id>
@@ -162,7 +166,7 @@
             <div :style="passengersSectionStyle()"></div>
             <div :style="elevatorSectionStyle()" class="elevatorsAddressRow flex row strech">
                 <div class="flex column elevatorsColumn" v-for="p in SECTFStore.currentRoom.numberOfPlayers" :key="p">
-                    <div :style="elevatorStyle(p)" class="elevator" >
+                    <div :style="elevatorStyle(p)" class="elevator" :class="{'turnOutline': isTurn(p-1)}">
                         <div :style="lightContainerHeight()" class="elevatorLightContainer flex row flex-center" >
                             <div :style="lightStyle()" class="elevatorLight" :class="{'green': SECTFStore.gameLastCheckpoint.data.elevators[p-1].light == 1}">▲</div>
                             <div :style="lightStyle()" class="elevatorLight" :class="{'red': SECTFStore.gameLastCheckpoint.data.elevators[p-1].light == 2}">▼</div>
@@ -180,13 +184,13 @@
         </div>
         <div :style="infoRowHeightStyle()"></div>
     </div>
-
-
-
-
 </template>
 
 <style scoped>
+    .turnOutline {
+        outline: 3px solid #f1de96;
+    }
+
     .floorsContainer {
         width: 100%;
         height: 100%;
@@ -216,7 +220,7 @@
 
     .elevator {
         background-color: var(--dark-blue);
-        transition-duration: 1s;
+        transition: 1s linear;
     }
 
     .turnNumber {
@@ -413,11 +417,11 @@
     .disabled {
         background-image: url(img/play_solo.svg);
         background-color: var(--dark-grey) !important;
-        cursor: unset;
+        cursor: unset !important;
     }
     .disabled:hover {
-        background-color: var(--dark-grey)
-        !important; cursor: unset;
+        background-color: var(--dark-grey) !important;
+        cursor: unset !important;
     }
 
 </style>

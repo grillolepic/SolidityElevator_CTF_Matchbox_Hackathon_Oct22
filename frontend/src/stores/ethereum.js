@@ -31,6 +31,7 @@ export const useEthereumStore = defineStore({
   
   getters: {
     networkOk: (state) => state.initialized && state.connected && supportedChainIds.includes(state.chainId) && (state.error == null),
+    fixedJsonProvider: (state) => fixedEthereumProvider,
     ethersProvider: (state) => _ethersProvider,
     ethersSigner: (state) => _ethersSigner
   },

@@ -123,12 +123,6 @@
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "winner",
-        "type": "address"
       }
     ],
     "name": "GameRoomFinished",
@@ -544,6 +538,11 @@
         "type": "uint64[2]"
       },
       {
+        "internalType": "uint256[2]",
+        "name": "actionsSold",
+        "type": "uint256[2]"
+      },
+      {
         "internalType": "uint8",
         "name": "waitingPassengers",
         "type": "uint8"
@@ -683,6 +682,11 @@
         "internalType": "uint64[2]",
         "name": "randomSeed",
         "type": "uint64[2]"
+      },
+      {
+        "internalType": "uint256[2]",
+        "name": "actionsSold",
+        "type": "uint256[2]"
       },
       {
         "internalType": "uint8",

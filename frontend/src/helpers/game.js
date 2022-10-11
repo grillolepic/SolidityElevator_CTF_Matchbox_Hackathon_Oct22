@@ -1,14 +1,24 @@
+import { parse } from '@vue/compiler-dom';
 import { DRNG } from './DRNG.js';
+
+const SOFT_TURN_DEADLINE = 1000;
+const HARD_TURN_DEADLINE = 1200;
 
 const NEW_PASSENGERS_SPAWN_RATE = 5n;
 const MAX_PASSENGERS_PER_ELEVATOR = 4n;
 const MAX_WAITING_PASSENGERS = 100n;
 
+const ELEVATOR_MAX_SPEED = 100;
+const ELEVATOR_MAX_FLOOR_QUEUE = 8;
+
+const ELEVATOR_LIGHT_OFF = 0;
+const ELEVATOR_LIGHT_UP = 1;
+const ELEVATOR_LIGHT_DOWN = 2;
+
 const FLOOR_BUTTON_OFF = 0;
 const FLOOR_BUTTON_UP = 1;
 const FLOOR_BUTTON_DOWN = 2;
 const FLOOR_BUTTON_BOTH = 3;
-
 
 const ELEVATOR_STATUS_IDLE = 0;
 const ELEVATOR_STATUS_GOING_UP = 1;
@@ -17,6 +27,13 @@ const ELEVATOR_STATUS_OPENING = 3;
 const ELEVATOR_STATUS_CLOSING = 4;
 const ELEVATOR_STATUS_WAITING = 5;
 const ELEVATOR_STATUS_UNDEFINED = 6;
+
+const SPEED_UP_ACTION = 0;
+const SLOW_DOWN_ACTION = 1;
+
+const GAME_STATUS_FINISHED_WITH_WINNER = 3;
+const GAME_STATUS_FINISHED_WITHOUT_WINNER = 4;
+
 
 class SolidityElevatorGame {
     static buildCheckpointFrom(remoteState) {
@@ -27,10 +44,12 @@ class SolidityElevatorGame {
             randomSeed: [],
             waitingPassengers: remoteState[0].waitingPassengers,
             elevators: [],
-            floorPassengers: []
+            floorPassengers: [],
+            actionsSold: []
         };
         remoteState[0].indices.forEach((i) => checkpointData.indices.push(i));
         remoteState[0].randomSeed.forEach((s) => checkpointData.randomSeed.push(s.toString()));
+        remoteState[0].actionsSold.forEach((a) => checkpointData.actionsSold.push(parseInt(a.toString())));
 
         remoteState[1].forEach((elevatorData) => {
             let elevator = {
@@ -62,9 +81,11 @@ class SolidityElevatorGame {
 
     //This is the key function for state-channel interaction.
     //It replicates the contract's play(uint256, uint16) function
-    static async playOffChain(lastState, currentRoom, elevatorContract) {
+    static async playOffChain(lastState, currentRoom, elevatorContracts, sectfContract) {
 
-        let nextState = { ... lastState };
+        if (lastState.status != 2) { return null; }
+
+        let nextState = JSON.parse(JSON.stringify(lastState));
 
         let _floorButtons = SolidityElevatorGame.#calculateFloorButtons(lastState.turn, lastState.floorPassengers);
         let _topScoreElevators = SolidityElevatorGame.#calculateTopScoreElevators(lastState.elevators);
@@ -73,7 +94,7 @@ class SolidityElevatorGame {
         let _currentElevatorId = lastState.indices[(lastState.turn - 1) % currentRoom.numberOfPlayers];
 
         // Then, calculate a new random number for this turn
-        let result = DRNG.next(lastState.randomSeed);
+        let result = DRNG.next([...lastState.randomSeed]);
         let _random = result.result;
         nextState.randomSeed = [result.nextSeed[0].toString(),result.nextSeed[1].toString()];
 
@@ -109,40 +130,285 @@ class SolidityElevatorGame {
         // This function receives an ElevatorUpdate struct.
 
         try {
-
             //Create the contract and make the call
-
-            let _update = elevatorContract.playTurnOffChain(
-                playTurnOffChain,
+            let _result = await elevatorContracts[_currentElevatorId].playTurnOffChain(
+                _currentElevatorId,
                 currentRoom.numberOfPlayers,
                 currentRoom.floors,
                 currentRoom.scoreToWin,
                 _topScoreElevators,
                 lastState.turn,
-                lastState.actionsSold,  //TODO: TERRIBLE! AGREGAR ACTIONS SOLD AL ESTADO
-                _elevatorInfo,
+                [...lastState.actionsSold],
+                [..._elevatorInfo],
                 _floorButtons
             );
 
+            if (_result.amount.toNumber() > 0) {
+                let _cost = await sectfContract.getActionCost(lastState.turn, lastState.actionsSold[_result.action], _result.action, _result.amount);
 
+                if (lastState.elevators[_currentElevatorId].balance >= _cost.toNumber()) {
+                    if ((_result.action == SPEED_UP_ACTION) && (lastState.elevators[_currentElevatorId].speed < ELEVATOR_MAX_SPEED)) {
 
+                        nextState.elevators[_currentElevatorId].balance -= _cost.toNumber();
+                        nextState.actionsSold[SPEED_UP_ACTION] += _result.amount.toNumber();
 
+                        if ((lastState.elevators[_currentElevatorId].speed + _result.amount.toNumber()) <= ELEVATOR_MAX_SPEED) {
+                            nextState.elevators[_currentElevatorId].speed += _result.amount.toNumber();
+                        } else {
+                            nextState.elevators[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
+                        }
+
+                    } else if ((_result.action == SLOW_DOWN_ACTION) && (lastState.elevators[_currentElevatorId].speed >= 2)) {
+
+                        nextState.elevators[_currentElevatorId].balance -= _cost.toNumber();
+                        nextState.actionsSold[SLOW_DOWN_ACTION] += _result.amount.toNumber();
+
+                        nextState.elevators[_result.target].speed = Math.floor(lastState.elevators[_result.target].speed / (2 ** _result.amount.toNumber()));
+
+                        if (nextState.elevators[_result.target].speed == 0) {
+                            nextState.elevators[_result.target].speed = 1;
+                        }
+                    }
+                }
+            }
+
+            nextState.elevators[_currentElevatorId].light = _result.light;
+            nextState.elevators[_currentElevatorId].data = _result.data;
+
+            if (_result.replaceFloorQueue) {
+                nextState.elevators[_currentElevatorId].floorQueue = [..._result.floorQueue];
+            } else {
+                for (let i=0; i<_result.floorQueue.length; i++) {
+                    if (nextState.elevators[_currentElevatorId].floorQueue.length == ELEVATOR_MAX_FLOOR_QUEUE) { break; }
+                    nextState.elevators[_currentElevatorId].floorQueue.push(_result.floorQueue[i]);
+                }
+                console.log(nextState.elevators[_currentElevatorId].floorQueue);
+            }
         } catch (err) {
-            console.log("CONTRACT INTERACTION FAILED");
+            console.log(err);
+            throw new Error("Cotract interaction failed. Retry or play on-chain");
         }
 
+        //////////////////////////////////////////////////////
+        //                    GAME LOGIC                    //
+        //////////////////////////////////////////////////////
 
+        //Now that the elevator has processed its turns, execute game logic depending on the current elevator state
+        //In the process, check if the elevator has won (by achieving target score)
+        let _won = false; //lastState.elevators[_currentElevatorId].score == currentRoom.scoreToWin;
+        
+        //'Idle' and 'Waiting' internally execute almost the same code, but can have different meanings
+        //  'Idle' is where the elevator starts: doors open, waiting for a commnad. Passengers can get in, but status
+        //  won't change to 'Closing' unitil a target flor is given with the floor queue.
+        //  'Waiting' is the immediate status set after an elevator reaches a target floor and opens it's doors.
+        //  In this status, doors are open and passengers first get out, then get in. After all passengers have moved,
+        //  it should switch to 'Idle' if there's no next floor in queue or to 'Closing' if there is.
 
+        if (lastState.elevators[_currentElevatorId].status == ELEVATOR_STATUS_IDLE ||
+            lastState.elevators[_currentElevatorId].status == ELEVATOR_STATUS_WAITING) {                   
 
+            let _currentFloor = SolidityElevatorGame.#currentFloor(lastState.elevators[_currentElevatorId]);
 
+            //First check if there are passengers to get out of the elevator
+            let _getOut = SolidityElevatorGame.#findNextPassangerToGetOut(lastState.elevators[_currentElevatorId]);
+            let _passengersToGoOut = _getOut[0];
+            let _targetOutgoingPassengerIndex = _getOut[1]; 
 
+            if (_passengersToGoOut) {
+                //If a passanger got out:
+                // 1) Remove it
+                nextState.elevators[_currentElevatorId].passengers.splice(_targetOutgoingPassengerIndex,1);
+                // 2) Add 1 to the elevator's score and check if score makes current elevator the winner
+                nextState.elevators[_currentElevatorId].score++;
+                console.log(nextState.elevators[_currentElevatorId].score);
+                if (nextState.elevators[_currentElevatorId].score == currentRoom.scoreToWin) {
+                    _won = true;
+                    console.log("WON!");
+                }
+                // 3) Update _topScoreElevators
+                _topScoreElevators = SolidityElevatorGame.#calculateTopScoreElevators(nextState.elevators);
+            } else {
 
+                //If all passengers who needed to get out got out,
+                //check if passangers are available to get into the elevator
+                let _getIn = SolidityElevatorGame.#findNextPassangerForElevator(
+                    lastState.elevators[_currentElevatorId],
+                    _currentFloor,
+                    lastState.floorPassengers[_currentFloor],
+                    MAX_PASSENGERS_PER_ELEVATOR
+                );
+                let _passengersToGetIn = _getIn[0];
+                let _targetPassengerIndex = _getIn[1];
 
+                if (_passengersToGetIn) {
+                    //If there's a passanger available to get in:
+                    // 1) Push it into the elevator and remove it from the floor
+                    nextState.elevators[_currentElevatorId].passengers.push(
+                        lastState.floorPassengers[_currentFloor][_targetPassengerIndex]);
 
-        return null;
+                    nextState.floorPassengers[_currentFloor].splice(_targetPassengerIndex,1);
+
+                    nextState.waitingPassengers--;
+
+                    // 3) Recalculate Floor Buttons
+                    _floorButtons = SolidityElevatorGame.#calculateFloorButtons(lastState.turn, nextState.floorPassengers);
+                } else {
+
+                    //If there's no passenger to get in, check if there's a floor in the queue (!= from current floor)
+                    let _hasChangedTargetFloor = false;
+
+                    for (let i=0; i<nextState.elevators[_currentElevatorId].floorQueue.length; i++) {
+                        // 1) Set the elevator's target floor
+                        nextState.elevators[_currentElevatorId].targetFloor = nextState.elevators[_currentElevatorId].floorQueue[0];
+
+                        // 2) Shift the floor queue
+                        nextState.elevators[_currentElevatorId].floorQueue.shift();
+
+                        // 3) Make sure target floor is different from current floor before breaking the loop
+                        if (nextState.elevators[_currentElevatorId].targetFloor != _currentFloor) {
+                            _hasChangedTargetFloor = true;
+                            break;
+                        }
+                    }
+
+                    //If a new valid target floor was set change status to 'Closing', if not, to 'Idle'
+                    nextState.elevators[_currentElevatorId].status = _hasChangedTargetFloor?ELEVATOR_STATUS_CLOSING:ELEVATOR_STATUS_IDLE;
+                }
+            }
+
+        } else if (lastState.elevators[_currentElevatorId].status == ELEVATOR_STATUS_GOING_UP) {
+            //Just increase the elevator's position until it reaches the targetFloor
+            //When reached, set status to 'Opening'
+
+            nextState.elevators[_currentElevatorId].y += nextState.elevators[_currentElevatorId].speed;
+            if (nextState.elevators[_currentElevatorId].y >= (nextState.elevators[_currentElevatorId].targetFloor * 100)) {
+                nextState.elevators[_currentElevatorId].y = (nextState.elevators[_currentElevatorId].targetFloor * 100);
+                nextState.elevators[_currentElevatorId].status = ELEVATOR_STATUS_OPENING;
+            }
+
+        } else if (lastState.elevators[_currentElevatorId].status == ELEVATOR_STATUS_GOING_DOWN) {
+            //Just decrease the elevator's position until it reaches the targetFloor
+            //(Being careful not to underflow!)
+            //When reached, set status to 'Opening'
+            if (nextState.elevators[_currentElevatorId].speed <= nextState.elevators[_currentElevatorId].y) {
+                nextState.elevators[_currentElevatorId].y -= nextState.elevators[_currentElevatorId].speed;
+            } else {
+                nextState.elevators[_currentElevatorId].y = 0;
+            }
+            if (nextState.elevators[_currentElevatorId].y <= (nextState.elevators[_currentElevatorId].targetFloor * 100)) {
+                nextState.elevators[_currentElevatorId].y = (nextState.elevators[_currentElevatorId].targetFloor * 100);
+                nextState.elevators[_currentElevatorId].status = ELEVATOR_STATUS_OPENING;
+            }
+
+        } else if (lastState.elevators[_currentElevatorId].status == ELEVATOR_STATUS_OPENING) {
+
+            //'Opening' can only lead to 'Waiting'
+            nextState.elevators[_currentElevatorId].status = ELEVATOR_STATUS_WAITING;
+
+        } else if (lastState.elevators[_currentElevatorId].status == ELEVATOR_STATUS_CLOSING) {
+
+            //Change Status to 'GoingUp' or 'GoingDown' depending on currentFloor and targetFloor
+            let _currentFloor = SolidityElevatorGame.#currentFloor(lastState.elevators[_currentElevatorId]);
+
+            if (_currentFloor < nextState.elevators[_currentElevatorId].targetFloor) {
+                nextState.elevators[_currentElevatorId].status = ELEVATOR_STATUS_GOING_UP;
+            } else if (_currentFloor > nextState.elevators[_currentElevatorId].targetFloor) {
+                nextState.elevators[_currentElevatorId].status = ELEVATOR_STATUS_GOING_DOWN;
+            } else {
+                //This should never happen
+                nextState.elevators[_currentElevatorId].status = ELEVATOR_STATUS_OPENING;
+            }
+        }
+
+        //////////////////////////////////////////////////////
+        //         FINISH GAME AND NEXT TURN LOGIC          //
+        //////////////////////////////////////////////////////
+
+        //After reaching SOFT_TURN_DEADLINE, the first player to reach first place (with score > second place) wins
+        //This is only valid if number of players > 1
+        if (!_won && lastState.turn > SOFT_TURN_DEADLINE && currentRoom.numberOfPlayers > 1) {
+            _won = (_topScoreElevators.length == 1);
+        }
+
+        if (_won) {
+            nextState.status = GAME_STATUS_FINISHED_WITH_WINNER;
+        } else {
+
+            // Indices are shuffled every time all 3 (or more) players have finished a turn
+            if (lastState.turn % currentRoom.numberOfPlayers == 0) {
+                let _newIndices =  SolidityElevatorGame.#shuffledIndices(_random, currentRoom.numberOfPlayers);
+                nextState.indices = [..._newIndices];
+            }
+
+            nextState.turn++;
+
+            //if HARD_TURN_DEADLINE is reached, the game is probably on an infinite loop. Finish it without a winner
+            if (nextState.turn > HARD_TURN_DEADLINE) {
+                nextState.status = GAME_STATUS_FINISHED_WITHOUT_WINNER;
+            }
+        }
+
+        return nextState;
     }
 
+    static #shuffledIndices(random, totalPlayers) {
+        let _result = [];
+        let _nextIndex = parseInt((random % BigInt(totalPlayers)).toString());
+        for (let i=0; i<totalPlayers; i++) {
+            _result.push(_nextIndex);
+            _nextIndex++;
+            if (_nextIndex >= totalPlayers) { _nextIndex = 0; }
+        }
+        return _result;
+    }
 
+    static #currentFloor(elevator) {
+        if (elevator.y % 100 != 0) { return null; }
+        return Math.floor(elevator.y / 100);
+    }
+
+    static #findNextPassangerForElevator(elevator, currentFloor, floorPassengers, maxPassengersPerElevator) {
+        if (elevator.passengers.length == maxPassengersPerElevator) { return [false, 0]; }
+
+        let _foundPassenger = false;
+        let _passangerIndex = 0;
+
+        for (let i=0; i<floorPassengers.length; i++) {
+            if (elevator.light == ELEVATOR_LIGHT_OFF) {
+                _foundPassenger = true;
+                _passangerIndex = i;
+                break;
+            } else {
+                if (floorPassengers[i] > currentFloor && elevator.light == ELEVATOR_LIGHT_UP) {
+                    _foundPassenger = true;
+                    _passangerIndex = i;
+                    break;
+                } else if (floorPassengers[i] < currentFloor && elevator.light == ELEVATOR_LIGHT_DOWN) {
+                    _foundPassenger = true;
+                    _passangerIndex = i;
+                    break;  
+                }
+            }
+        }
+
+        return [_foundPassenger, _passangerIndex];
+    }
+
+    static #findNextPassangerToGetOut(elevator) {
+        if (elevator.passengers.length == 0) { return [false, 0]; }
+
+        let _foundPassenger = false;
+        let _passangerIndex = 0;
+
+        for (let i=0; i<elevator.passengers.length; i++) {
+            if (elevator.passengers[i] == elevator.targetFloor) {
+                _foundPassenger = true;
+                _passangerIndex = i;
+                break;
+            }
+        }
+        return [_foundPassenger, _passangerIndex];
+    }
 
     static #buildElevatorsInfo(elevatorsData, currentElevator) {
         let _elevatorsInfo = new Array(elevatorsData.length).fill({});
@@ -150,33 +416,33 @@ class SolidityElevatorGame {
         for (let i=0; i<elevatorsData.length; i++) {
             if (i == currentElevator) {
                 //For the current playing elevator, we provide the full elevator data
-                _elevatorsInfo[i] = {
-                    status: elevatorsData[i].status,
-                    light: elevatorsData[i].light,
-                    score: elevatorsData[i].score,
-                    targetFloor: elevatorsData[i].targetFloor,
-                    floorQueue: elevatorsData[i].floorQueue,
-                    passengers: elevatorsData[i].passengers,
-                    balance: elevatorsData[i].balance,
-                    speed: elevatorsData[i].speed,
-                    y: elevatorsData[i].y,
-                    data: elevatorsData[i].data
-                };
+                _elevatorsInfo[i] = [
+                    elevatorsData[i].status,
+                    elevatorsData[i].light,
+                    elevatorsData[i].score,
+                    elevatorsData[i].targetFloor,
+                    [...elevatorsData[i].floorQueue],
+                    [...elevatorsData[i].passengers],
+                    elevatorsData[i].balance,
+                    elevatorsData[i].speed,
+                    elevatorsData[i].y,
+                    elevatorsData[i].data
+                ];
             } else {
                 //For other elevators, we skip the status, the target floor, the floor queue,
                 //the passengers list and the data.
-                _elevatorsInfo[i] = {
-                    status: ELEVATOR_STATUS_UNDEFINED,
-                    light: elevatorsData[i].light,
-                    score: elevatorsData[i].score,
-                    targetFloor: 0,
-                    floorQueue: [],
-                    passengers: [],
-                    balance: elevatorsData[i].balance,
-                    speed: elevatorsData[i].speed,
-                    y: elevatorsData[i].y,
-                    data: ""
-                };
+                _elevatorsInfo[i] = [
+                    ELEVATOR_STATUS_UNDEFINED,
+                    elevatorsData[i].light,
+                    elevatorsData[i].score,
+                    0,
+                    [],
+                    [],
+                    elevatorsData[i].balance,
+                    elevatorsData[i].speed,
+                    elevatorsData[i].y,
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ];
             }
         }
         return _elevatorsInfo;
@@ -185,13 +451,13 @@ class SolidityElevatorGame {
     static #newPassenger(random, totalFloors, waitingPassengers, maxWaitingPassengers, spawnRate) {
         if (waitingPassengers >= maxWaitingPassengers) { return [false, 0, 0]; }
         if (random % spawnRate == 0) {
-            random >>= 8;
-            let _startFloor = random % totalFloors;
+            random >>= 8n;
+            let _startFloor = parseInt((random % BigInt(totalFloors)).toString());
             let _targetFloor = _startFloor;
             while (_startFloor == _targetFloor) {
-                random >>= 8;
-                _targetFloor = random % totalFloors;
-                if (random == 0) { return [false, 0, 0]; }
+                random >>= 8n;
+                _targetFloor = parseInt((random % BigInt(totalFloors)).toString());
+                if (random == 0n) { return [false, 0, 0]; }
             }
             return [true, _startFloor, _targetFloor];
         }

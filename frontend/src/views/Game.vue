@@ -6,6 +6,7 @@
     import GameViewer from '@/components/GameViewer.vue';
   
     const dialog = ref(false);
+
     const turnsToPlayOnChain = ref(10);
   
     function showOnChainDialog(b) {
@@ -31,9 +32,9 @@
         if (n == -1 && turnsToPlayOnChain.value > 1) { turnsToPlayOnChain.value-= 1; }
     }
 
-    async function playOnChain(turns) {
-        if (!canPushState() && turns >= 1 && turns <= 100) {
-            await SECTFStore.playOnChain(turns);
+    async function playOnChain(turns, finish = false) {
+        if (!canPushState() && ((turns >= 1 && turns <= 100) || finish)) {
+            await SECTFStore.playOnChain(turns, finish);
             dialog.value = false;
         }
     }
@@ -42,16 +43,18 @@
         if (SECTFStore.gameLastCheckpoint != null) {
             if (!SECTFStore.gameLastCheckpoint.on_chain) {
                 if (SECTFStore.gameLastCheckpoint.data.turn > SECTFStore.gameLastBlockchainTurn) {
-                    return true;
+                    if (SECTFStore.currentRoom.numberOfPlayers > 1) {
+                        return true;
+                    }
                 }
             }
         }
         return false;
     }
 
-    async function pushState() {
-        if (canPushState()) {
-            await SECTFStore.pushState();
+    async function pushState(finish = false) {
+        if (canPushState() || (finish && SECTFStore.currentRoom.numberOfPlayers > 1)) {
+            await SECTFStore.pushState(finish);
             dialog.value = false;
         }
     }
@@ -60,13 +63,37 @@
         SECTFStore.toggleAutomaticTurns();
     }
 
+    function isFinished() {
+        return (SECTFStore.currentRoomStatus > 2 || (SECTFStore.gameLastCheckpoint != null && SECTFStore.gameLastCheckpoint.data.status > 2));
+    }
+
     onBeforeRouteLeave((to, from, next) => { SECTFStore.leave(); next(); });
     onUnmounted((to, from, next) => { SECTFStore.leave(); });
 </script>
 
 <template>
 
-    <div id="blackout" class="flex flex-center" :class="{'showBlackout': dialog || (SECTFStore.gameBlockchainInteraction)}" @click="showOnChainDialog(false)" v-if="SECTFStore.currentRoomStatus == 2"></div>
+    <div id="blackout" class="flex flex-center" :class="{'showBlackout': dialog || isFinished() || (SECTFStore.gameBlockchainInteraction)}" @click="showOnChainDialog(false)" v-if="SECTFStore.currentRoomStatus == 2"></div>
+
+    <div id="finishedDialog" class="flex column flex-center" :class="{'showDialog': isFinished() }" v-if="(SECTFStore.currentRoomStatus > 2 || SECTFStore.gameLastCheckpoint != null && SECTFStore.gameLastCheckpoint.data.status > 2)">
+        <div id="finishedTitle" class="flex flex-center">Game Finished!</div>
+        <div class="dialogActions flex column flex-center" v-if="SECTFStore.finishedGameBlockchainInteraction">
+            <LoadingSpinner />
+        </div>
+        <div class="dialogActions flex column flex-center" v-else-if="SECTFStore.currentRoomStatus > 2">
+        </div>
+        <div class="dialogActions flex column flex-center" v-else>
+            <div class="flex column flex-center" v-if="SECTFStore.currentRoom.numberOfPlayers == 1">
+                <div class="dialogDescription">This is a single player game and must be fully verified on-chain be completed.</div>
+                <div class="button" @click="playOnChain(1 + (SECTFStore.gameLastCheckpoint.data.turn - SECTFStore.gameLastBlockchainTurn), true)">Play {{SECTFStore.gameLastCheckpoint.data.turn - SECTFStore.gameLastBlockchainTurn}} Turns On Chain</div>
+            </div>
+            <div v-else>
+                <div>This game can be verified on-chain to be finished</div>
+                <div id="pushStateButton" class="button" :class="{'disabledButton': !canPushState() }" @click="pushState()">Push Current State to the Blockchain</div>
+            </div>
+        </div>
+    </div>
+
     <div id="onChainDialog" class="flex column flex-center" :class="{'showDialog': dialog || (SECTFStore.gameBlockchainInteraction)}" v-if="SECTFStore.currentRoomStatus == 2">
         <div id="onChainTitle" class="flex flex-center">On-Chain Actions</div>
         <div class="dialogActions flex column flex-center" v-if="SECTFStore.gameBlockchainInteraction">
@@ -211,4 +238,40 @@
         width: 100vw;
         height: 800px;
     }
+
+
+
+
+
+
+
+
+
+    #finishedDialog {
+        position: fixed;
+        width: 50%;
+        height: 50%;
+        width: 500px;
+        height: 260px;
+        background-color: var(--white-mute);
+        transform: scale(0);
+        transition: 250ms;
+        box-shadow: #00000061 0px 0px 24px;
+        z-index: 600;
+    }
+
+    #finishedTitle {
+        width: 100%;
+        height: 40px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+    }
+
+    .dialogDescription {
+        width: 80%;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
 </style>

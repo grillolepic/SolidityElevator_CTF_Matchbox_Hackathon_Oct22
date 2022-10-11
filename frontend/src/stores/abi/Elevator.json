@@ -1,0 +1,150 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "myId",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "numberOfPlayers",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "floors",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "scoreToWin",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8[]",
+        "name": "topScoreElevators",
+        "type": "uint8[]"
+      },
+      {
+        "internalType": "uint16",
+        "name": "turn",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint256[2]",
+        "name": "actionsSold",
+        "type": "uint256[2]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorStatus",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorLight",
+            "name": "light",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "score",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "targetFloor",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "floorQueue",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "passengers",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "uint32",
+            "name": "balance",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "speed",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "y",
+            "type": "uint32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "data",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.ElevatorInfo[]",
+        "name": "elevInfo",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "enum SolidityElevatorCTF.FloorButtons[]",
+        "name": "floorButtons",
+        "type": "uint8[]"
+      }
+    ],
+    "name": "playTurnOffChain",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "enum SolidityElevatorCTF.ElevatorLight",
+            "name": "light",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bool",
+            "name": "replaceFloorQueue",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint8[]",
+            "name": "floorQueue",
+            "type": "uint8[]"
+          },
+          {
+            "internalType": "enum SolidityElevatorCTF.ActionType",
+            "name": "action",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "target",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "data",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct SolidityElevatorCTF.ElevatorUpdate",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

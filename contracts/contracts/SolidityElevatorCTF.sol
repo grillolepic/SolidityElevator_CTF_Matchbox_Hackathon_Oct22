@@ -27,7 +27,7 @@ contract SolidityElevatorCTF {
     event GameRoomReady(uint256 indexed id);
     event GameRoomCancelled(uint256 indexed id);
     event GameRoomUpdated(uint256 indexed id);
-    event GameRoomFinished(uint256 indexed id, address winner);
+    event GameRoomFinished(uint256 indexed id);
 
     /*//////////////////////////////////////////////////////////////
                         MISCELLANEOUS CONSTANTS
@@ -48,7 +48,7 @@ contract SolidityElevatorCTF {
 
     uint8 private constant NEW_PASSENGERS_SPAWN_RATE = 5;   //MORE IS LESS
     uint8 private constant MAX_PASSENGERS_PER_ELEVATOR = 4;
-    uint8 private constant MAX_WAITING_PASSENGERS = 100;
+    uint8 private constant MAX_WAITING_PASSENGERS = 60;
     
     uint8 private constant ELEVATOR_INITIAL_SPEED = 10;
     uint8 private constant ELEVATOR_MAX_SPEED = 100;
@@ -60,8 +60,6 @@ contract SolidityElevatorCTF {
     /*//////////////////////////////////////////////////////////////
                       ACTIONS & PRICING CONSTANTS
     //////////////////////////////////////////////////////////////*/
-
-    uint8 private constant ACTIONS_TYPES = 2;
 
     enum ActionType { SPEED_UP, SLOW_DOWN }
 
@@ -167,7 +165,7 @@ contract SolidityElevatorCTF {
         uint16 turn;
         uint8 waitingPassengers;
         uint64[2] randomSeed;
-        uint256[ACTIONS_TYPES] actionsSold;
+        uint256[2] actionsSold;
     }
 
     uint256 public totalGameRooms;
@@ -218,7 +216,7 @@ contract SolidityElevatorCTF {
         address[] memory _players = new address[](1);
         uint8[] memory _indices = new uint8[](1);
         address[] memory _offchainPublicKeys = new address[](1);
-        uint256[ACTIONS_TYPES] memory _actionsSold;
+        uint256[2] memory _actionsSold;
 
         _players[0] = msg.sender;
         _indices[0] = 0;
@@ -346,36 +344,37 @@ contract SolidityElevatorCTF {
                         OFF-CHAIN STATE LOADING
     //////////////////////////////////////////////////////////////*/
 
-    function hashCheckpoint(uint256 id, uint16 turn, uint8 status, uint8[] memory indices, uint64[2] memory randomSeed, uint8 waitingPassengers, ElevatorData[] memory elevData, FloorPassengerData[] memory floorData) public pure returns (bytes32) {
-        return keccak256(abi.encode(id, turn, status, indices, randomSeed, waitingPassengers, elevData, floorData));
+    function hashCheckpoint(uint256 id, uint16 turn, uint8 status, uint8[] memory indices, uint64[2] memory randomSeed, uint256[2] memory actionsSold, uint8 waitingPassengers, ElevatorData[] memory elevData, FloorPassengerData[] memory floorData) public pure returns (bytes32) {
+        return keccak256(abi.encode(id, turn, status, indices, randomSeed, actionsSold, waitingPassengers, elevData, floorData));
     }
 
-    function loadCheckpoint(uint256 id, uint16 turn, uint8 status, uint8[] memory indices, uint64[2] memory randomSeed, uint8 waitingPassengers, ElevatorData[] memory elevData, FloorPassengerData[] memory floorData, bytes[] memory signature) external {
+    function loadCheckpoint(uint256 id, uint16 turn, uint8 status, uint8[] memory indices, uint64[2] memory randomSeed, uint256[2] memory actionsSold, uint8 waitingPassengers, ElevatorData[] memory elevData, FloorPassengerData[] memory floorData, bytes[] memory signature) external {
         GameRoom memory _room = gameRooms[id];
         if (_room.status != GameRoomStatus.Ready) { revert GameRoomUnavailable(id); }
 
         require(_room.offchainPublicKeys.length == signature.length);
         require(_room.turn < turn);
 
+        _room.turn = turn;
+        _room.status = GameRoomStatus(status);
+        _room.indices = indices;
+        _room.waitingPassengers = waitingPassengers;
+        _room.randomSeed = randomSeed;
+        _room.actionsSold = actionsSold;
+
+        gameRooms[id] = _room;
+        elevatorsData[id] = elevData;
+        floorPassengersData[id] = floorData;
+
         emit GameRoomUpdated(id);
 
-        bytes32 hashedCheckpoint = hashCheckpoint(id, turn, status, indices, randomSeed, waitingPassengers, elevData, floorData);
+        bytes32 hashedCheckpoint = hashCheckpoint(id, turn, status, indices, randomSeed, actionsSold, waitingPassengers, elevData, floorData);
         bytes32 hashedCheckpointMessage = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hashedCheckpoint));
 
         for (uint256 i=0; i<_room.offchainPublicKeys.length; i++) {
             address _recovered = recoverSigner(hashedCheckpointMessage, signature[i]);
             require (_recovered == _room.offchainPublicKeys[i]);
         }
-
-        _room.turn = turn;
-        _room.status = GameRoomStatus(status);
-        _room.indices = indices;
-        _room.randomSeed = randomSeed;
-        _room.waitingPassengers = waitingPassengers;
-
-        gameRooms[id] = _room;
-        elevatorsData[id] = elevData;
-        floorPassengersData[id] = floorData;
     }
 
     function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _signature) internal pure returns (address) {
@@ -471,7 +470,6 @@ contract SolidityElevatorCTF {
                         if (_elevatorsData[_currentElevatorId].balance >= _cost) {
 
                             //Only purchase and execute the actions if within speed limits: (0 <= speed <= ELEVATOR_MAX_SPEED)
-
                             if ((_update.action == ActionType.SPEED_UP) && (_elevatorsData[_currentElevatorId].speed < ELEVATOR_MAX_SPEED)) {
 
                                 _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
@@ -482,10 +480,6 @@ contract SolidityElevatorCTF {
                                 } else {
                                     _elevatorsData[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
                                 }
-
-                                //console.log("SPEED_UP on Turn", _room.turn, "- elevator", _currentElevatorId);
-                                //console.log(" --> Increased speed to", _elevatorsData[_currentElevatorId].speed, "and is left with a balance of", _elevatorsData[_currentElevatorId].balance);
-
                             } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed >= 2)) {
 
                                 _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
@@ -496,11 +490,6 @@ contract SolidityElevatorCTF {
                                 if (_elevatorsData[_update.target].speed == 0) {
                                     _elevatorsData[_update.target].speed = 1;
                                 }
-
-                                //console.log("SLOW_DOWN on Turn", _room.turn, "- elevator", _currentElevatorId);
-                                //console.log(" --> Decreased speed of elevator", _update.target, "to", _elevatorsData[_update.target].speed);
-                                //console.log("Left with", _elevatorsData[_currentElevatorId].balance);
-
                             }
                         }
                     }
@@ -582,7 +571,10 @@ contract SolidityElevatorCTF {
                             // 2) Update passengers in memory
                             _elevatorsData[_currentElevatorId].passengers = elevatorsData[gameRoomId][_currentElevatorId].passengers;
 
-                            // 3) Recalculate Floor Buttons
+                            // 3) Update WaitingPassengers
+                            _room.waitingPassengers--;
+
+                            // 4) Recalculate Floor Buttons
                             _floorButtons = calculateFloorButtons(_room.turn, floorPassengersData[gameRoomId]);
                         } else {
                             //If there's no passenger to get in, check if there's a floor in the queue (!= from current floor)
@@ -703,7 +695,11 @@ contract SolidityElevatorCTF {
             }
         }
 
-        emit GameRoomUpdated(gameRoomId);
+        if (_room.status == GameRoomStatus.Ready) {
+            emit GameRoomUpdated(gameRoomId);
+        } else {
+            emit GameRoomFinished(gameRoomId);
+        }
     }
     
     /*//////////////////////////////////////////////////////////////
