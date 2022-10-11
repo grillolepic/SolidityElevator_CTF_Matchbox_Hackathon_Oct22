@@ -566,7 +566,8 @@ export const useSECTFStore = defineStore({
 
                 console.log(` - Received turn: ${this.gameLastBlockchainTurn}`);
                 
-                if (this.gameLastCheckpoint == null || this.gameLastCheckpoint.data.turn < _gameState[0].turn ||
+                if (this.currentRoom.numberOfPlayers == 1 ||
+                    this.gameLastCheckpoint == null || this.gameLastCheckpoint.data.turn < _gameState[0].turn ||
                     (this.gameLastCheckpoint.data.turn == _gameState[0].turn && !this.gameLastCheckpoint.on_chain)){
 
                     console.log(` - Last checkpoint was: ${(this.gameLastCheckpoint == null)?"null":this.gameLastCheckpoint.data.turn}`);
