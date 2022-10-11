@@ -3,7 +3,7 @@ const hre = require("hardhat");
 async function main() {
   const elevatorFactory = await ethers.getContractFactory("ExampleElevator");
   for (let i=0; i<4; i++) {
-    const ELEVATOR = await elevatorFactory.deploy("0x799a115229d156c4837f8b9d889762A48980138C");
+    const ELEVATOR = await elevatorFactory.deploy("0x068c8027e820A07233a644F33C5a478127D7a481");
     console.log(`ELEVATOR deployed to ${ELEVATOR.address}`);
   }
 }

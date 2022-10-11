@@ -1071,9 +1071,10 @@ export const useSECTFStore = defineStore({
             console.log("SECTF: leave()");
             if (_trysteroRoom != null) {
                 _trysteroRoom.leave();
-                _trysteroRoom = null;
-                //this.$patch({ ..._resetState });
+                _trysteroRoom = null;   
             }
+            this.$patch({ ..._resetState });
+            this.gamePeers = {};
             _elevatorContracts = [];
             _offchainSigner = null;
             _sendMessage = null;

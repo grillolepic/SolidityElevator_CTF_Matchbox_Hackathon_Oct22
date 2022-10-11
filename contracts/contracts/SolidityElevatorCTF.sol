@@ -50,7 +50,7 @@ contract SolidityElevatorCTF {
     uint8 private constant MAX_PASSENGERS_PER_ELEVATOR = 4;
     uint8 private constant MAX_WAITING_PASSENGERS = 60;
     
-    uint8 private constant ELEVATOR_INITIAL_SPEED = 10;
+    uint8 private constant ELEVATOR_MIN_SPEED = 10;
     uint8 private constant ELEVATOR_MAX_SPEED = 100;
     uint8 private constant ELEVATOR_MAX_FLOOR_QUEUE = 8;
     uint32 private constant ELEVATOR_INITIAL_BALANCE = 15000;
@@ -142,7 +142,7 @@ contract SolidityElevatorCTF {
             _empty,
             _empty,
             ELEVATOR_INITIAL_BALANCE,
-            ELEVATOR_INITIAL_SPEED,
+            ELEVATOR_MIN_SPEED,
             0,
             bytes32(0)
         );
@@ -374,7 +374,7 @@ contract SolidityElevatorCTF {
                 removeFromActiveGameRooms(id, _room.players[i]);
             }
         }
-        
+
         bytes32 hashedCheckpoint = hashCheckpoint(id, turn, status, indices, randomSeed, actionsSold, waitingPassengers, elevData, floorData);
         bytes32 hashedCheckpointMessage = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hashedCheckpoint));
 
@@ -487,15 +487,15 @@ contract SolidityElevatorCTF {
                                 } else {
                                     _elevatorsData[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
                                 }
-                            } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed >= 2)) {
+                            } else if ((_update.action == ActionType.SLOW_DOWN) && (_elevatorsData[_update.target].speed > ELEVATOR_MIN_SPEED)) {
 
                                 _elevatorsData[_currentElevatorId].balance -= uint32(_cost);
                                 _room.actionsSold[uint256(ActionType.SLOW_DOWN)] += _update.amount;
 
                                 _elevatorsData[_update.target].speed = uint8(uint256(_elevatorsData[_update.target].speed) / (2 ** _update.amount));
 
-                                if (_elevatorsData[_update.target].speed == 0) {
-                                    _elevatorsData[_update.target].speed = 1;
+                                if (_elevatorsData[_update.target].speed < ELEVATOR_MIN_SPEED) {
+                                    _elevatorsData[_update.target].speed = ELEVATOR_MIN_SPEED;
                                 }
                             }
                         }

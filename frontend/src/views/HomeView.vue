@@ -6,9 +6,6 @@
   const ethereumStore = useEthereumStore();
   const SECTFStore = useSECTFStore();
 
-  function finish(id) {
-    SECTFStore.exitRoom(id);
-  }
 </script>
 
 <template>

@@ -5,8 +5,8 @@ const networkNames = {
 };
 
 const solidityElevatorContractAddress = {
-    '0xa4ba': '0xF2aB53Cf1279eA390B79ec8eBd75e76A5074Ffa2',
-    '0x66eed': '0x799a115229d156c4837f8b9d889762A48980138C'
+    '0xa4ba': '0x89904C10D46584fB2775B66Ae94057dCe7647AB3',
+    '0x66eed': '0x068c8027e820A07233a644F33C5a478127D7a481'
 };
 
 const supportedChainIds = ["0xa4ba", "0x66eed"];

@@ -8,6 +8,7 @@ const NEW_PASSENGERS_SPAWN_RATE = 5n;
 const MAX_PASSENGERS_PER_ELEVATOR = 4n;
 const MAX_WAITING_PASSENGERS = 100n;
 
+const ELEVATOR_MIN_SPEED = 10;
 const ELEVATOR_MAX_SPEED = 100;
 const ELEVATOR_MAX_FLOOR_QUEUE = 8;
 
@@ -158,15 +159,15 @@ class SolidityElevatorGame {
                             nextState.elevators[_currentElevatorId].speed = ELEVATOR_MAX_SPEED;
                         }
 
-                    } else if ((_result.action == SLOW_DOWN_ACTION) && (lastState.elevators[_currentElevatorId].speed >= 2)) {
+                    } else if ((_result.action == SLOW_DOWN_ACTION) && (lastState.elevators[_currentElevatorId].speed > ELEVATOR_MIN_SPEED)) {
 
                         nextState.elevators[_currentElevatorId].balance -= _cost.toNumber();
                         nextState.actionsSold[SLOW_DOWN_ACTION] += _result.amount.toNumber();
 
                         nextState.elevators[_result.target].speed = Math.floor(lastState.elevators[_result.target].speed / (2 ** _result.amount.toNumber()));
 
-                        if (nextState.elevators[_result.target].speed == 0) {
-                            nextState.elevators[_result.target].speed = 1;
+                        if (nextState.elevators[_result.target].speed <= ELEVATOR_MIN_SPEED) {
+                            nextState.elevators[_result.target].speed = ELEVATOR_MIN_SPEED;
                         }
                     }
                 }
