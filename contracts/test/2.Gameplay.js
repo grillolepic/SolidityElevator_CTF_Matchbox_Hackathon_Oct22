@@ -27,11 +27,11 @@ describe("Gameplay", function () {
     
         let randomWallet = ethers.Wallet.createRandom();
         const ELEVATOR_1 = await exampleElevatorFactory.connect(player1).deploy(SECTF.address);
-        await SECTF.connect(player1).createGameRoom(1, 8, 10, ELEVATOR_1.address, randomWallet.address);
+        await SECTF.connect(player1).createGameRoom(2, 8, 10, ELEVATOR_1.address, randomWallet.address);
         
-        //randomWallet = ethers.Wallet.createRandom();
-        //const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
-        //await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
+        randomWallet = ethers.Wallet.createRandom();
+        const ELEVATOR_2 = await exampleElevatorFactory.connect(player2).deploy(SECTF.address);
+        await SECTF.connect(player2).joinGameRoom(0, ELEVATOR_2.address, randomWallet.address);
   
         let gameRoom = (await SECTF.getGameState(0))[0];
         console.log(`GameRoom's turn is now: ${gameRoom.turn}`);
