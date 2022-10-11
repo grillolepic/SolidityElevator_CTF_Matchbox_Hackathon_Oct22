@@ -499,6 +499,7 @@ export const useSECTFStore = defineStore({
 
             let stopAll = new Array(this.currentRoom.numberOfPlayers).fill(0);
             this.gamePeersTurnMode = stopAll;
+            this.loadActiveRooms();
         },
 
         async pushStateToBlockchain(finish) {
