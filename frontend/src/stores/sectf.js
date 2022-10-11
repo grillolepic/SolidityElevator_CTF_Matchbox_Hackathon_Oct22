@@ -194,7 +194,7 @@ export const useSECTFStore = defineStore({
             try {
                 let gameState = (await _solidityElevatorCTFContract.getGameState(id));
 
-                if (gameState[0].status > 1 || gameState[0].status < 5) {
+                if (gameState[0].status > 0 && gameState[0].status < 5) {
 
                     let room = {
                         floors: gameState[0].floors,
